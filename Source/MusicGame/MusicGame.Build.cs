@@ -39,7 +39,8 @@ public class MusicGame : ModuleRules
 			"MusicGame/Variant_SideScrolling/AI",
 			"MusicGame/Variant_SideScrolling/Gameplay",
 			"MusicGame/Variant_SideScrolling/Interfaces",
-			"MusicGame/Variant_SideScrolling/UI"
+			"MusicGame/Variant_SideScrolling/UI",
+			"MusicGame/Rhythm"
 		});
 
 		// Uncomment if you are using Slate UI
