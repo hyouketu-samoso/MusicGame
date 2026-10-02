@@ -32,6 +32,14 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input|Touch Controls")
 	TSubclassOf<UUserWidget> MobileControlsWidgetClass;
 
+	/** メイン画面のウィジェット（WBP_GameMain を指定する） */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<UUserWidget> MainWidgetClass;
+
+	/** 生成したメイン画面のウィジェット */
+	UPROPERTY()
+	TObjectPtr<UUserWidget> MainWidget;
+
 	/** Pointer to the mobile controls widget */
 	TObjectPtr<UUserWidget> MobileControlsWidget;
 

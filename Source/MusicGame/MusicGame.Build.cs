@@ -18,8 +18,10 @@ public class MusicGame : ModuleRules
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",
-			"Slate"
-		});
+			"Slate",
+            "SlateCore",
+			"Niagara"
+        });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 

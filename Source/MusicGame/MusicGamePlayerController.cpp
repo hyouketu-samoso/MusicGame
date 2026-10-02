@@ -13,6 +13,16 @@ void AMusicGamePlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// メイン画面を表示（ローカルプレイヤーのみ）
+	if (IsLocalPlayerController() && MainWidgetClass)
+	{
+		MainWidget = CreateWidget<UUserWidget>(this, MainWidgetClass);
+		if (MainWidget)
+		{
+			MainWidget->AddToViewport();
+		}
+	}
+
 	// only spawn touch controls on local player controllers
 	if (SVirtualJoystick::ShouldDisplayTouchInterface() && IsLocalPlayerController())
 	{
