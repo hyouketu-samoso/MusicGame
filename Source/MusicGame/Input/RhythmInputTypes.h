@@ -20,4 +20,6 @@ struct FLaneInput
 	UPROPERTY(BlueprintReadWrite)int32 Lane = 0;		// 0=L←, 1=L→, 2=R←, 3=R→
 	UPROPERTY(BlueprintReadWrite) double Timestamp = 0;	// 後で楽曲時間にする
 	UPROPERTY(BlueprintReadWrite)EInputType InputType = EInputType::Key;
+
+	UPROPERTY(BlueprintReadWrite) double HeldSec = 0;	// 押していた秒数(ホールド通知と離した時に入る)
 };
