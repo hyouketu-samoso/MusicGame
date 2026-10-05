@@ -27,8 +27,9 @@ ANoteActor::ANoteActor()
 	}
 }
 
-void ANoteActor::Launch(const FVector& InStartPos, const FVector& InTargetPos, float InArcHeight, float InTravelTime, const FLinearColor& InColor)
+void ANoteActor::Launch(const FVector& InStartPos, const FVector& InTargetPos, float InArcHeight, float InTravelTime, const FLinearColor& InColor, int32 InLaneIndex)
 {
+	LaneIndex = InLaneIndex;
 	StartPos = InStartPos;
 	TargetPos = InTargetPos;
 	ArcHeight = InArcHeight;
@@ -36,12 +37,17 @@ void ANoteActor::Launch(const FVector& InStartPos, const FVector& InTargetPos, f
 	SpawnTime = GetWorld()->GetTimeSeconds();
 	bLaunched = true;
 
+	ApplyColor(InColor);
+
+	UpdateNote(0.0f);
+}
+
+void ANoteActor::ApplyColor(const FLinearColor& Color)
+{
 	if (UMaterialInstanceDynamic* MID = Mesh->CreateAndSetMaterialInstanceDynamic(0))
 	{
-		MID->SetVectorParameterValue(TEXT("Color"), InColor);
+		MID->SetVectorParameterValue(TEXT("Color"), Color);
 	}
-
-	SetActorLocation(CalcPosition(0.0f));
 }
 
 void ANoteActor::Tick(float DeltaTime)
@@ -58,9 +64,26 @@ void ANoteActor::Tick(float DeltaTime)
 	// 曲の再生位置に置き換えるだけで音とズレなくなる。
 	const float T = static_cast<float>((GetWorld()->GetTimeSeconds() - SpawnTime) / TravelTime);
 
+	UpdateNote(T);
+}
+
+void ANoteActor::UpdateNote(float T)
+{
 	SetActorLocation(CalcPosition(T));
 
-	if (T >= DestroyProgress)
+	// 判定待ちの間は消さない（ミス判定が出る前に消えないように）
+	if (T >= DestroyProgress && !bWaitForJudge)
+	{
+		Destroy();
+	}
+}
+
+void ANoteActor::OnJudged(ERhythmJudgement Judgement, ENoteJudgePoint Point)
+{
+	bWaitForJudge = false;
+
+	// ミスは見逃したノーツなので、そのまま飛んでいって DestroyProgress で消える
+	if (Judgement != ERhythmJudgement::Miss)
 	{
 		Destroy();
 	}
