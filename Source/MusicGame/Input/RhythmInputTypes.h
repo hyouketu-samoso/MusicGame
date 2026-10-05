@@ -1,10 +1,10 @@
-// ============================================================
+ï»¿// ============================================================
 // RhythmInputTypes
-//  –ğŠ„ : “ü—Í‚Ü‚í‚è‚Å‹¤—L‚·‚éŒ^‚Ì’è‹`(‘¼‚Ì’S“–Ò‚Æ‚Ì‹«ŠE)
-//  “à—e : EInputType  = “ü—Í‚Ìí—Ş(Flick / Key)
-//         FLaneInput  = 1‰ñ‚Ì“ü—ÍƒCƒxƒ“ƒg(Lane, Timestamp, InputType)
-//  Lane : 0=L©, 1=L¨, 2=R©, 3=R¨
-//  Timestamp‚ÍŒ»İ ‰¼BŒã‚ÅŠy‹ÈŠÔ‚É·‚µ‘Ö‚¦‚é
+//  å½¹å‰² : å…¥åŠ›ã¾ã‚ã‚Šã§å…±æœ‰ã™ã‚‹å‹ã®å®šç¾©(ä»–ã®æ‹…å½“è€…ã¨ã®å¢ƒç•Œ)
+//  å†…å®¹ : EInputType  = å…¥åŠ›ã®ç¨®é¡(Flick / Key)
+//         FLaneInput  = 1å›ã®å…¥åŠ›ã‚¤ãƒ™ãƒ³ãƒˆ(Lane, Timestamp, InputType)
+//  Lane : 0=Lâ†, 1=Lâ†’, 2=Râ†, 3=Râ†’
+//  Timestampã¯ç¾åœ¨ ä»®ã€‚å¾Œã§æ¥½æ›²æ™‚é–“ã«å·®ã—æ›¿ãˆã‚‹
 // ============================================================
 #pragma once
 #include "CoreMinimal.h"
@@ -17,7 +17,7 @@ USTRUCT(BlueprintType)
 struct FLaneInput
 {
 	GENERATED_BODY()
-	UPROPERTY(BlueprintReadWrite)int32 Lane = 0;		// 0=L©, 1=L¨, 2=R©, 3=R¨
-	UPROPERTY(BlueprintReadWrite) double Timestamp = 0;	// Œã‚ÅŠy‹ÈŠÔ‚É‚·‚é
+	UPROPERTY(BlueprintReadWrite)int32 Lane = 0;		// 0=Lâ†, 1=Lâ†’, 2=Râ†, 3=Râ†’
+	UPROPERTY(BlueprintReadWrite) double Timestamp = 0;	// å¾Œã§æ¥½æ›²æ™‚é–“ã«ã™ã‚‹
 	UPROPERTY(BlueprintReadWrite)EInputType InputType = EInputType::Key;
 };

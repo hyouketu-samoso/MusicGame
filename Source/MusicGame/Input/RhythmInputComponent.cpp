@@ -1,4 +1,4 @@
-#include "RhythmInputComponent.h"
+ï»¿#include "RhythmInputComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
@@ -7,6 +7,7 @@
 URhythmInputComponent::URhythmInputComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bTickEvenWhenPaused = true;	//ãƒãƒ¼ã‚ºä¸­ã‚‚Escã‚’æ¤œå‡ºã™ã‚‹
 
 	KeyToLane.Add(EKeys::D, 0);
 	KeyToLane.Add(EKeys::F, 1);
@@ -22,7 +23,13 @@ void URhythmInputComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	APlayerController* PC = Cast<APlayerController>(GetOwner());
 	if (!PC) return;
 
-	// ƒL[ƒ{[ƒh
+	// ãƒãƒ¼ã‚ºå…¥åŠ›(ãƒãƒ¼ã‚ºä¸­ã§ã‚‚å—ã‘ä»˜ã‘ã‚‹)
+	UpdatePause(PC);
+
+	// ãƒãƒ¼ã‚ºä¸­ã¯ãƒ¬ãƒ¼ãƒ³å…¥åŠ›ã‚’å‡ºã•ãªã„
+	if(GetWorld()->IsPaused()) return;
+
+	// ã‚­ãƒ¼ãƒœãƒ¼ãƒ‰
 	for (const TPair<FKey, int32>& Pair : KeyToLane)
 	{
 		const bool bDown = PC->IsInputKeyDown(Pair.Key);
@@ -37,20 +44,37 @@ void URhythmInputComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 		}
 	}
 	
-	// ƒXƒeƒBƒbƒN
+	// ã‚¹ãƒ†ã‚£ãƒƒã‚¯
 	const double Now = GetWorld()->GetTimeSeconds();
 	const float LX = PC->GetInputAnalogKeyState(EKeys::Gamepad_LeftX);
 	const float RX = PC->GetInputAnalogKeyState(EKeys::Gamepad_RightX);
 
-	UpdateStick(LX, LeftStick, 0, 1, Now);	// L © =0, L ¨ =1
-	UpdateStick(RX, RightStick, 2, 3, Now);	// R © =2, R ¨ =3
+	UpdateStick(LX, LeftStick, 0, 1, Now);	// L â† =0, L â†’ =1
+	UpdateStick(RX, RightStick, 2, 3, Now);	// R â† =2, R â†’ =3
 
 	if (bShowDebug && GEngine)
 	{
-		// ƒL[(Key)‚ğŒÅ’è‚É‚·‚é‚ÆA“¯‚¶s‚ª–ˆƒtƒŒ[ƒ€ã‘‚«‚³‚ê‚é
+		// ã‚­ãƒ¼(Key)ã‚’å›ºå®šã«ã™ã‚‹ã¨ã€åŒã˜è¡ŒãŒæ¯ãƒ•ãƒ¬ãƒ¼ãƒ ä¸Šæ›¸ãã•ã‚Œã‚‹
 		GEngine->AddOnScreenDebugMessage(100, 0.f, FColor::Cyan,
 			FString::Printf(TEXT("LX=%d t =%.3f count=%d"),
 				LastLane, LastLaneTime, FireCount));
+	}
+}
+
+void URhythmInputComponent::UpdatePause(APlayerController* PC)
+{
+	// Esc ã¾ãŸã¯ Startãƒœã‚¿ãƒ³(UEä¸Šã§ã¯ Gamepad_Special_Right)
+	const bool bDown = PC->IsInputKeyDown(EKeys::Escape)
+		|| PC->IsInputKeyDown(EKeys::Gamepad_Special_Right);
+
+	if (bDown && !bPauseHeld)
+	{
+		bPauseHeld = true;
+		OnPauseInput.Broadcast();
+	}
+	else if (!bDown) 
+	{
+		bPauseHeld = false;
 	}
 }
 
@@ -59,7 +83,7 @@ void URhythmInputComponent::UpdateStick(float X, FStickState& State,
 {
 	const float AbsX = FMath::Abs(X);
 
-	// ƒjƒ…[ƒgƒ‰ƒ‹‚É–ß‚Á‚½‚çÄó•t
+	// ãƒ‹ãƒ¥ãƒ¼ãƒˆãƒ©ãƒ«ã«æˆ»ã£ãŸã‚‰å†å—ä»˜
 	if (AbsX < ReleaseThreshold)
 	{
 		State.bArmed = true;
@@ -70,7 +94,7 @@ void URhythmInputComponent::UpdateStick(float X, FStickState& State,
 
 	const int32 Dir = (X < 0.f) ? -1 : 1;
 
-	// ”­‰Î’¼Œã‚Ì‹t•ûŒü(–ß‚è‚Ì¨‚¢)‚Í–³‹
+	// ç™ºç«ç›´å¾Œã®é€†æ–¹å‘(æˆ»ã‚Šã®å‹¢ã„)ã¯ç„¡è¦–
 	if (State.LastDir != 0 && Dir != State.LastDir
 		&& (Now - State.LastFireTime) < ReverseLockSec)
 	{
@@ -89,7 +113,7 @@ void URhythmInputComponent::FireLane(int32 Lane, EInputType Type)
 {
 	FLaneInput In;
 	In.Lane = Lane;
-	In.Timestamp = GetWorld()->GetTimeSeconds();	//Œã‚ÅŠy‹ÈŠÔ‚É‚·‚é
+	In.Timestamp = GetWorld()->GetTimeSeconds();	//å¾Œã§æ¥½æ›²æ™‚é–“ã«ã™ã‚‹
 	In.InputType = Type;
 
 	UE_LOG(LogTemp, Log, TEXT("Lane %d t = %.3f type=%s"), Lane, In.Timestamp,

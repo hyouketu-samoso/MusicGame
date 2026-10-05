@@ -1,10 +1,11 @@
-// ============================================================
+ï»¿// ============================================================
 // RhythmInputComponent
-//  –ğŠ„ : ƒL[ƒ{[ƒh(D/F/J/K)‚ÆƒXƒeƒBƒbƒN’e‚«‚ğŒŸo‚µA
-//         4ƒŒ[ƒ“‚Ì“ü—ÍƒCƒxƒ“ƒg‚É•ÏŠ·‚·‚é
-//  oŒû : OnLaneInput(FLaneInput)
-//  Lane : 0=L©, 1=L¨, 2=R©, 3=R¨
-// Timestamp‚ÍŒ»İƒ[ƒ‹ƒhŠÔ(‰¼)BŒãC‚ÅŠy‹ÈŠÔ‚É·‚µ‘Ö‚¦‚é
+//  å½¹å‰² : ã‚­ãƒ¼ãƒœãƒ¼ãƒ‰(D/F/J/K)ã¨ã‚¹ãƒ†ã‚£ãƒƒã‚¯å¼¾ãã‚’æ¤œå‡ºã—ã€
+//         4ãƒ¬ãƒ¼ãƒ³ã®å…¥åŠ›ã‚¤ãƒ™ãƒ³ãƒˆã«å¤‰æ›ã™ã‚‹
+//  å‡ºå£ : OnLaneInput(FLaneInput)
+//		   OnPauseInput() â†Esc/Startãƒœã‚¿ãƒ³
+//  Lane : 0=Lâ†, 1=Lâ†’, 2=Râ†, 3=Râ†’
+// Timestampã¯ç¾åœ¨ãƒ¯ãƒ¼ãƒ«ãƒ‰æ™‚é–“(ä»®)ã€‚å¾ŒCã§æ¥½æ›²æ™‚é–“ã«å·®ã—æ›¿ãˆã‚‹
 // ============================================================
 #pragma once
 #include "CoreMinimal.h"
@@ -13,13 +14,14 @@
 #include "RhythmInputComponent.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnLaneInput, const FLaneInput&, Input);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPauseInput);
 
-// ƒXƒeƒBƒbƒN1–{•ª‚Ìó‘Ô
+// ã‚¹ãƒ†ã‚£ãƒƒã‚¯1æœ¬åˆ†ã®çŠ¶æ…‹
 struct FStickState
 {
-	bool bArmed = true;				// ”­‰Î‚Å‚«‚éó‘Ô‚©
-	double LastFireTime = -100.0f;	// ÅŒã‚É”­‰Î‚µ‚½
-	int32 LastDir = 0;				// ÅŒã‚É”­‰Î‚µ‚½Œü‚«(-1=¶ +1=‰E)
+	bool bArmed = true;				// ç™ºç«ã§ãã‚‹çŠ¶æ…‹ã‹
+	double LastFireTime = -100.0f;	// æœ€å¾Œã«ç™ºç«ã—ãŸæ™‚åˆ»
+	int32 LastDir = 0;				// æœ€å¾Œã«ç™ºç«ã—ãŸå‘ã(-1=å·¦ +1=å³)
 };
 
 UCLASS(ClassGroup = (Rhythm), meta = (BlueprintSpawnableComponent))
@@ -31,8 +33,12 @@ class MUSICGAME_API URhythmInputComponent : public UActorComponent
 public:
 	URhythmInputComponent();
 
-	UPROPERTY(BluePrintAssignable)
+	UPROPERTY(BlueprintAssignable)
 	FOnLaneInput OnLaneInput;
+
+	// Esc / Startãƒœã‚¿ãƒ³ãŒæŠ¼ã•ã‚ŒãŸç¬é–“ã«ç™ºç«
+	UPROPERTY(BlueprintAssignable)
+	FOnPauseInput OnPauseInput;
 
 	void FireLane(int32 Lane, EInputType Type);
 
@@ -42,18 +48,22 @@ protected:
 
 private:
 	void UpdateStick(float x, FStickState& State, int32 LeftLane, int32 RightLane, double Now);
-	TMap<FKey, int32> KeyToLane;	// D,F,J,K ¨0..3
-	TSet<FKey> HeldKeys;			// ‰Ÿ‚µ‚Á‚Ï‚È‚µ‚Ì˜A‘±”­‰Î‚ğ–h‚®
+	void UpdatePause(APlayerController* PC);
+
+	TMap<FKey, int32> KeyToLane;	// D,F,J,K â†’0..3
+	TSet<FKey> HeldKeys;			// æŠ¼ã—ã£ã±ãªã—ã®é€£ç¶šç™ºç«ã‚’é˜²ã
 
 	FStickState LeftStick;
 	FStickState RightStick;
 
-	// ’²®—p‚Ì’l(Œã‚ÅDataAsset‚ÉˆÚ‚·)
-	float FireThreshold = 0.65f;	// ‚±‚êˆÈã“|‚ê‚½‚ç”­‰Î
-	float ReleaseThreshold = 0.3f;	// ‚±‚êˆÈ‰º‚É–ß‚Á‚½‚çÄó•t
-	float ReverseLockSec = 0.06f;	// ”­‰ÎŒãA‹t•ûŒü‚ğ–³Œø‚É‚·‚é•b”
+	bool bPauseHeld = false;		// ãƒãƒ¼ã‚ºã‚­ãƒ¼ã®æŠ¼ã—ã£ã±ãªã—é˜²æ­¢
 
-	// ƒfƒoƒbƒO•\¦
+	// èª¿æ•´ç”¨ã®å€¤(å¾Œã§DataAssetã«ç§»ã™)
+	float FireThreshold = 0.65f;	// ã“ã‚Œä»¥ä¸Šå€’ã‚ŒãŸã‚‰ç™ºç«
+	float ReleaseThreshold = 0.3f;	// ã“ã‚Œä»¥ä¸‹ã«æˆ»ã£ãŸã‚‰å†å—ä»˜
+	float ReverseLockSec = 0.06f;	// ç™ºç«å¾Œã€é€†æ–¹å‘ã‚’ç„¡åŠ¹ã«ã™ã‚‹ç§’æ•°
+
+	// ãƒ‡ãƒãƒƒã‚°è¡¨ç¤º
 	bool bShowDebug = true;
 	int32 LastLane = -1;
 	double LastLaneTime = 0.0f;
