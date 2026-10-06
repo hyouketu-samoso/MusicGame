@@ -22,7 +22,8 @@ public class MusicGame : ModuleRules
 			"UMG",
 			"Slate",
             "SlateCore",
-			"Niagara"
+			"Niagara",
+			"MediaAssets",
         });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
