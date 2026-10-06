@@ -6,6 +6,8 @@
 #include "SoundNoteSpawner.generated.h"
 
 class ASoundNoteActor;
+class AHoldNoteActor;
+class ARhythmJudge;
 class UArrowComponent;
 
 UCLASS()
@@ -17,20 +19,24 @@ public:
 
 	ASoundNoteSpawner();
 
-	// 譜面データからノーツを生成
+	virtual void BeginPlay() override;
+
+	// 譜面からノーツを生成
 	ASoundNoteActor* SpawnNoteFromData(
 		const FNoteData& NoteData
 	);
 
-	// テスト用
-	UFUNCTION(BlueprintCallable, Category = "Note Spawner")
+	// 自動生成テスト
+	UFUNCTION()
 	void SpawnWave();
 
-	// テスト用
-	UFUNCTION(BlueprintCallable, Category = "Note Spawner")
-	void SpawnNote(int32 LaneIndex);
+	// ノーツ生成
+	void SpawnNote(
+		int32 LaneIndex
+	);
 
-	// ノーツの飛行時間
+	// ノーツが判定ラインまで到達する時間
+	UFUNCTION(BlueprintPure, Category = "Note Spawner")
 	float GetTravelTime() const
 	{
 		return TravelTime;
@@ -38,129 +44,114 @@ public:
 
 protected:
 
-	virtual void BeginPlay() override;
-
-	// =========================
-	// ノーツクラス
-	// =========================
-
 	UPROPERTY(
 		EditAnywhere,
-		Category = "Note Spawner|Class"
+		BlueprintReadOnly,
+		Category = "Note"
 	)
 	TSubclassOf<ASoundNoteActor> NoteClass;
 
 	UPROPERTY(
 		EditAnywhere,
-		Category = "Note Spawner|Class"
+		BlueprintReadOnly,
+		Category = "Note"
 	)
 	TSubclassOf<ASoundNoteActor> TapNoteClass;
 
 	UPROPERTY(
 		EditAnywhere,
-		Category = "Note Spawner|Class"
+		BlueprintReadOnly,
+		Category = "Note"
 	)
 	TSubclassOf<ASoundNoteActor> FlickNoteClass;
 
 	UPROPERTY(
 		EditAnywhere,
-		Category = "Note Spawner|Class"
+		BlueprintReadOnly,
+		Category = "Note"
 	)
 	TSubclassOf<ASoundNoteActor> HoldNoteClass;
 
-	// =========================
-	// レーン
-	// =========================
-
+	// 判定役
 	UPROPERTY(
 		EditAnywhere,
-		Category = "Note Spawner|Lane"
+		BlueprintReadOnly,
+		Category = "Rhythm"
+	)
+	TObjectPtr<ARhythmJudge> RhythmJudge;
+
+	// 4レーン分の色
+	UPROPERTY(
+		EditAnywhere,
+		BlueprintReadOnly,
+		Category = "Lane"
 	)
 	TArray<FLinearColor> LaneColors;
 
+	// レーン間隔
 	UPROPERTY(
 		EditAnywhere,
-		Category = "Note Spawner|Lane",
-		meta = (Units = "cm")
+		BlueprintReadOnly,
+		Category = "Lane"
 	)
-	float LaneSpacing = 150.0f;
+	float LaneSpacing = 200.0f;
 
-	// =========================
-	// ノーツ移動
-	// =========================
-
+	// ノーツの出現位置までの距離
 	UPROPERTY(
 		EditAnywhere,
-		Category = "Note Spawner|Movement",
-		meta = (Units = "cm")
+		BlueprintReadOnly,
+		Category = "Note"
 	)
-	float SpawnDistance = 5000.0f;
+	float SpawnDistance = 2000.0f;
 
+	// ノーツの高さ
 	UPROPERTY(
 		EditAnywhere,
-		Category = "Note Spawner|Movement",
-		meta = (Units = "cm")
+		BlueprintReadOnly,
+		Category = "Note"
 	)
 	float SpawnHeight = 0.0f;
 
+	// 判定ラインまでの移動時間
 	UPROPERTY(
 		EditAnywhere,
-		Category = "Note Spawner|Movement",
-		meta = (Units = "cm")
+		BlueprintReadOnly,
+		Category = "Note"
 	)
-	float ArcHeight = 400.0f;
+	float TravelTime = 2.0f;
 
 	UPROPERTY(
 		EditAnywhere,
-		Category = "Note Spawner|Movement",
-		meta = (
-			ClampMin = "0.1",
-			Units = "s"
-			)
+		BlueprintReadOnly,
+		Category = "Note"
 	)
-	float TravelTime = 2.5f;
+	float ArcHeight = 0.0f;
 
-	// =========================
-	// テスト用
-	// =========================
-
+	// テスト用自動生成
 	UPROPERTY(
 		EditAnywhere,
-		Category = "Note Spawner|Test"
+		BlueprintReadOnly,
+		Category = "Test"
 	)
 	bool bAutoSpawn = false;
 
 	UPROPERTY(
 		EditAnywhere,
-		Category = "Note Spawner|Test",
-		meta = (
-			ClampMin = "0.1",
-			Units = "s",
-			EditCondition = "bAutoSpawn"
-			)
+		BlueprintReadOnly,
+		Category = "Test"
 	)
-	float SpawnInterval = 3.0f;
-
-#if WITH_EDITORONLY_DATA
-
-	UPROPERTY(
-		VisibleAnywhere,
-		Category = "Note Spawner"
-	)
-	TObjectPtr<UArrowComponent> Arrow;
-
-#endif
+	float SpawnInterval = 1.0f;
 
 private:
-
-	FVector GetLaneTarget(
-		int32 LaneIndex
-	) const;
 
 	TSubclassOf<ASoundNoteActor>
 		GetNoteClassForType(
 			const FString& Type
 		) const;
+
+	FVector GetLaneTarget(
+		int32 LaneIndex
+	) const;
 
 	FTimerHandle AutoSpawnTimer;
 };

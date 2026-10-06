@@ -13,7 +13,7 @@ ARhythmJudge::ARhythmJudge()
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 
 	// ThirdPersonの操作（WASD・Space・マウス）とぶつからないキーを仮置き
-	LaneKeys = { EKeys::F, EKeys::G, EKeys::H, EKeys::J, EKeys::K };
+	LaneKeys = { EKeys::F, EKeys::G, EKeys::H, EKeys::J};
 
 	JudgementCounts.Init(0, StaticEnum<ERhythmJudgement>()->NumEnums() - 1);
 }
