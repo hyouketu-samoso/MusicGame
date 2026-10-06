@@ -1,58 +1,128 @@
-// ChartImporter.cpp
 #include "ChartImporter.h"
+
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
-bool UChartImporter::LoadChart(const FString& FilePath, TArray<FNoteData>& OutNotes)
+bool UChartImporter::LoadChart(
+	const FString& FilePath,
+	TArray<FNoteData>& OutNotes
+)
 {
-    FString JsonString;
-    if (!FFileHelper::LoadFileToString(JsonString, *FilePath))
-        return false;
+	FString JsonString;
 
-    TSharedPtr<FJsonValue> RootValue;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+	if (!FFileHelper::LoadFileToString(
+		JsonString,
+		*FilePath))
+	{
+		return false;
+	}
 
-    if (!FJsonSerializer::Deserialize(Reader, RootValue) || !RootValue.IsValid())
-        return false;
+	TSharedPtr<FJsonValue> RootValue;
 
-    const TArray<TSharedPtr<FJsonValue>> Events = RootValue->AsArray();
+	TSharedRef<TJsonReader<>> Reader =
+		TJsonReaderFactory<>::Create(JsonString);
 
-    OutNotes.Empty();
-    TMap<int32, float> ActiveNotes; // note_on の開始時間を記録
+	if (!FJsonSerializer::Deserialize(
+		Reader,
+		RootValue
+	) || !RootValue.IsValid())
+	{
+		return false;
+	}
 
-    for (auto& EventValue : Events)
-    {
-        TSharedPtr<FJsonObject> Obj = EventValue->AsObject();
-        if (!Obj.IsValid()) continue;
+	if (RootValue->Type != EJson::Array)
+	{
+		return false;
+	}
 
-        float Time = Obj->GetNumberField("time");
-        int32 NoteNumber = Obj->GetIntegerField("note");
-        FString EventType = Obj->GetStringField("type");
+	const TArray<TSharedPtr<FJsonValue>>& Events =
+		RootValue->AsArray();
 
-        if (EventType == "note_on")
-        {
-            ActiveNotes.Add(NoteNumber, Time);
-        }
-        else if (EventType == "note_off")
-        {
-            if (!ActiveNotes.Contains(NoteNumber)) continue;
+	OutNotes.Empty();
 
-            float StartTime = ActiveNotes[NoteNumber];
-            float Duration = Time - StartTime;
+	TMap<int32, float> ActiveNotes;
 
-            FNoteData Data;
-            Data.Time = StartTime;
-            Data.Duration = Duration;
-            Data.Lane = NoteNumber % 4;   // とりあえずレーンは note % 4
-            Data.Type = TEXT("tap");      // まず全部 tap でOK
+	for (const TSharedPtr<FJsonValue>& EventValue : Events)
+	{
+		if (!EventValue.IsValid())
+		{
+			continue;
+		}
 
-            OutNotes.Add(Data);
-            ActiveNotes.Remove(NoteNumber);
-        }
-    }
+		TSharedPtr<FJsonObject> Obj =
+			EventValue->AsObject();
 
-    return true;
+		if (!Obj.IsValid())
+		{
+			continue;
+		}
+
+		float Time =
+			Obj->GetNumberField(TEXT("time"));
+
+		int32 NoteNumber =
+			Obj->GetIntegerField(TEXT("note"));
+
+		FString EventType =
+			Obj->GetStringField(TEXT("type"));
+
+		if (EventType == TEXT("note_on"))
+		{
+			ActiveNotes.Add(
+				NoteNumber,
+				Time
+			);
+		}
+		else if (EventType == TEXT("note_off"))
+		{
+			if (!ActiveNotes.Contains(NoteNumber))
+			{
+				continue;
+			}
+
+			float StartTime =
+				ActiveNotes[NoteNumber];
+
+			float Duration =
+				Time - StartTime;
+
+			FNoteData Data;
+
+			Data.Time = StartTime;
+			Data.Duration = Duration;
+			Data.Lane = NoteNumber % 4;
+
+			// Determine note type
+			if (NoteNumber == 57)
+			{
+				Data.Type = TEXT("flick");
+			}
+			else if (Duration >= 1.0f)
+			{
+				Data.Type = TEXT("hold");
+			}
+			else
+			{
+				Data.Type = TEXT("tap");
+			}
+
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT("=== NEW CHART IMPORTER === Note=%d Duration=%.3f Type=%s"),
+				NoteNumber,
+				Duration,
+				*Data.Type
+			);
+
+			OutNotes.Add(Data);
+
+			ActiveNotes.Remove(NoteNumber);
+		}
+	}
+
+	return true;
 }

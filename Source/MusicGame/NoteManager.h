@@ -1,33 +1,70 @@
-// NoteManager.h
 #pragma once
+
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "NoteData.h"
 #include "NoteManager.generated.h"
 
+class ASoundNoteSpawner;
+
 UCLASS()
-class ANoteManager : public AActor
+class MUSICGAME_API ANoteManager : public AActor
 {
-    GENERATED_BODY()
+	GENERATED_BODY()
 
 public:
-    ANoteManager();
 
-    UPROPERTY(EditAnywhere)
-    TSubclassOf<AActor> TapNoteBP;
+	ANoteManager();
 
-    UPROPERTY(EditAnywhere)
-    TSubclassOf<AActor> FlickNoteBP;
+	virtual void Tick(float DeltaTime) override;
 
-    UPROPERTY(EditAnywhere)
-    TSubclassOf<AActor> HoldNoteBP;
+	// 譜面データを設定
+	void InitNotes(
+		const TArray<FNoteData>& InNotes
+	);
 
-    void InitNotes(const TArray<FNoteData>& InNotes);
-    void UpdateSpawn(float CurrentTime, float SpawnOffset);
+	// 譜面開始
+	UFUNCTION(BlueprintCallable, Category = "Note Manager")
+	void StartChart();
+
+	// 譜面停止
+	UFUNCTION(BlueprintCallable, Category = "Note Manager")
+	void StopChart();
+
+	// ノーツ生成処理
+	void UpdateSpawn(
+		float CurrentSongTime
+	);
 
 protected:
-    TArray<FNoteData> Notes;
 
-    void SpawnNote(const FNoteData& Note);
-    FVector GetLanePosition(int32 Lane) const;
+	virtual void BeginPlay() override;
+
+	UPROPERTY(
+		EditAnywhere,
+		Category = "Chart"
+	)
+	TObjectPtr<ASoundNoteSpawner> NoteSpawner;
+
+	UPROPERTY(
+		EditAnywhere,
+		Category = "Chart"
+	)
+	float StartDelay = 1.0f;
+
+private:
+
+	void SpawnNote(
+		const FNoteData& Note
+	);
+
+	bool FindSpawner();
+
+private:
+
+	TArray<FNoteData> Notes;
+
+	double ChartStartWorldTime = 0.0;
+
+	bool bChartRunning = false;
 };

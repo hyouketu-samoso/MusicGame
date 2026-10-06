@@ -1,46 +1,339 @@
-// NoteManager.cpp
 #include "NoteManager.h"
+
+#include "SoundNoteSpawner.h"
+#include "SoundNoteActor.h"
+
 #include "Engine/World.h"
+#include "EngineUtils.h"
+
 
 ANoteManager::ANoteManager()
 {
-    PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 }
 
-void ANoteManager::InitNotes(const TArray<FNoteData>& InNotes)
+
+// ============================================================
+// BeginPlay
+// ============================================================
+
+void ANoteManager::BeginPlay()
 {
-    Notes = InNotes;
+	Super::BeginPlay();
+
+	UE_LOG(
+		LogTemp,
+		Error,
+		TEXT("！！！！新しい NoteManager.cpp が実行されています！！！！")
+	);
+
+	if (!NoteSpawner)
+	{
+		FindSpawner();
+	}
 }
 
-void ANoteManager::UpdateSpawn(float CurrentTime, float SpawnOffset)
+// ============================================================
+// Tick
+// ============================================================
+
+void ANoteManager::Tick(float DeltaTime)
 {
-    for (FNoteData& Note : Notes)
-    {
-        if (!Note.bSpawned && CurrentTime >= Note.Time - SpawnOffset)
-        {
-            SpawnNote(Note);
-            Note.bSpawned = true;
-        }
-    }
+	Super::Tick(DeltaTime);
+
+	if (!bChartRunning)
+	{
+		return;
+	}
+
+	if (!GetWorld())
+	{
+		return;
+	}
+
+	const double CurrentWorldTime =
+		GetWorld()->GetTimeSeconds();
+
+	const float CurrentSongTime =
+		static_cast<float>(
+			CurrentWorldTime -
+			ChartStartWorldTime
+			);
+
+	UpdateSpawn(CurrentSongTime);
 }
 
-void ANoteManager::SpawnNote(const FNoteData& Note)
+
+// ============================================================
+// 譜面設定
+// ============================================================
+
+void ANoteManager::InitNotes(
+	const TArray<FNoteData>& InNotes
+)
 {
-    UClass* SpawnClass = nullptr;
+	Notes.Empty();
 
-    if (Note.Type == TEXT("tap"))   SpawnClass = *TapNoteBP;
-    else if (Note.Type == TEXT("flick")) SpawnClass = *FlickNoteBP;
-    else if (Note.Type == TEXT("hold"))  SpawnClass = *HoldNoteBP;
+	Notes = InNotes;
 
-    if (!SpawnClass) return;
+	Notes.Sort(
+		[](const FNoteData& A, const FNoteData& B)
+		{
+			return A.Time < B.Time;
+		}
+	);
 
-    FVector SpawnLocation = GetLanePosition(Note.Lane);
+	for (FNoteData& Note : Notes)
+	{
+		Note.bSpawned = false;
+	}
 
-    GetWorld()->SpawnActor<AActor>(SpawnClass, SpawnLocation, FRotator::ZeroRotator);
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT(
+			"NoteManager: Initialized %d notes."
+		),
+		Notes.Num()
+	);
+
+	for (const FNoteData& Note : Notes)
+	{
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT(
+				"Note: Time=%.3f Duration=%.3f Lane=%d Type=%s"
+			),
+			Note.Time,
+			Note.Duration,
+			Note.Lane,
+			*Note.Type
+		);
+	}
 }
 
-FVector ANoteManager::GetLanePosition(int32 Lane) const
+
+// ============================================================
+// 譜面開始
+// ============================================================
+
+void ANoteManager::StartChart()
 {
-    // 仮のレーン配置（Y方向に並べる）
-    return FVector(0.f, Lane * 200.f, 0.f);
+	UE_LOG(
+		LogTemp,
+		Error,
+		TEXT(
+			"========== StartChart() call =========="
+		)
+	);
+
+	if (!GetWorld())
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("NoteManager: StartChart - GetWorld() is null"));
+		return;
+	}
+
+	if (Notes.Num() == 0)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT(
+				"NoteManager: StartChart - ノーツが0個です"
+			)
+		);
+
+		return;
+	}
+
+	for (FNoteData& Note : Notes)
+	{
+		Note.bSpawned = false;
+	}
+
+	ChartStartWorldTime =
+		GetWorld()->GetTimeSeconds() +
+		StartDelay;
+
+	bChartRunning = true;
+
+	UE_LOG(
+		LogTemp,
+		Error,
+		TEXT(
+			"NoteManager: Chart started! Notes=%d StartTime=%.3f"
+		),
+		Notes.Num(),
+		ChartStartWorldTime
+	);
+}
+
+
+// ============================================================
+// 譜面停止
+// ============================================================
+
+void ANoteManager::StopChart()
+{
+	bChartRunning = false;
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT(
+			"NoteManager: Chart stopped."
+		)
+	);
+}
+
+
+// ============================================================
+// ノーツ生成タイミング
+// ============================================================
+
+void ANoteManager::UpdateSpawn(float CurrentSongTime)
+{
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT(
+			"NoteManager: UpdateSpawn CurrentSongTime=%.3f"
+		),
+		CurrentSongTime
+	);
+
+	if (!NoteSpawner)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT(
+				"NoteManager: UpdateSpawn - NoteSpawner is null"
+			)
+		);
+
+		return;
+	}
+
+	const float TravelTime =
+		NoteSpawner->GetTravelTime();
+
+	for (FNoteData& Note : Notes)
+	{
+		if (Note.bSpawned)
+		{
+			continue;
+		}
+
+		const float SpawnTime =
+			Note.Time -
+			TravelTime;
+
+		if (CurrentSongTime >= SpawnTime)
+		{
+			SpawnNote(Note);
+
+			Note.bSpawned = true;
+		}
+	}
+}
+
+
+// ============================================================
+// ノーツ生成
+// ============================================================
+
+void ANoteManager::SpawnNote(
+	const FNoteData& Note
+)
+{
+	if (!NoteSpawner)
+	{
+		return;
+	}
+
+	UE_LOG(
+		LogTemp,
+		Error,
+		TEXT(
+			"NoteManager: SpawnNote Time=%.3f Lane=%d Type=%s"
+		),
+		Note.Time,
+		Note.Lane,
+		*Note.Type
+	);
+
+	ASoundNoteActor* SpawnedNote =
+		NoteSpawner->SpawnNoteFromData(Note);
+
+	if (!SpawnedNote)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT(
+				"NoteManager: Failed to spawn "
+				"Time=%.3f Lane=%d Type=%s"
+			),
+			Note.Time,
+			Note.Lane,
+			*Note.Type
+		);
+	}
+	else
+	{
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT(
+				"NoteManager: Spawn SUCCESS"
+			)
+		);
+	}
+}
+
+
+// ============================================================
+// Spawner検索
+// ============================================================
+
+bool ANoteManager::FindSpawner()
+{
+	if (!GetWorld())
+	{
+		return false;
+	}
+
+	for (
+		TActorIterator<ASoundNoteSpawner> It(GetWorld());
+		It;
+		++It
+		)
+	{
+		NoteSpawner = *It;
+
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT(
+				"NoteManager: Found SoundNoteSpawner."
+			)
+		);
+
+		return true;
+	}
+
+	UE_LOG(
+		LogTemp,
+		Error,
+		TEXT(
+			"NoteManager: SoundNoteSpawner not found."
+		)
+	);
+
+	return false;
 }

@@ -1,33 +1,40 @@
 #pragma once
+
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
-#include "NoteManager.h"
 #include "NoteData.h"
 #include "MusicGameMode.generated.h"
 
+class UAudioComponent;
+class USoundBase;
+class ANoteManager;
+
 UCLASS()
-class AMusicGameMode : public AGameModeBase
+class MUSICGAME_API AMusicGameMode : public AGameModeBase
 {
-    GENERATED_BODY()
+	GENERATED_BODY()
 
 public:
-    virtual void BeginPlay() override;
-    virtual void Tick(float DeltaSeconds) override;
 
-    UPROPERTY(EditAnywhere)
-    USoundBase* MusicSound;
+	AMusicGameMode();
 
-    UPROPERTY(EditAnywhere)
-    float SpawnOffset = 1.5f;
+	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 
 protected:
-    UPROPERTY()
-    ANoteManager* NoteManager;
 
-    UPROPERTY()
-    UAudioComponent* MusicAudioComponent;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Music")
+	USoundBase* MusicSound;
 
-    TArray<FNoteData> Notes;
+private:
 
-    float StartTime = 0.0f;   // ★ 曲の再生開始時間（Quartz の代わり）
+	UPROPERTY()
+	TObjectPtr<ANoteManager> NoteManager;
+
+	UPROPERTY()
+	TObjectPtr<UAudioComponent> MusicAudioComponent;
+
+	TArray<FNoteData> Notes;
+
+	float StartTime = 0.0f;
 };
