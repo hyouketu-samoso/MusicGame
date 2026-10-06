@@ -1,23 +1,35 @@
 #pragma once
+
 #include "CoreMinimal.h"
 #include "NoteData.generated.h"
 
 USTRUCT(BlueprintType)
 struct FNoteData
 {
-    GENERATED_BODY()
+	GENERATED_BODY()
 
-    UPROPERTY(BlueprintReadWrite)
-    float Time;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float Time = 0.0f;
 
-    UPROPERTY(BlueprintReadWrite)
-    int32 Lane;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float Duration = 0.0f;
 
-    UPROPERTY(BlueprintReadWrite)
-    FString Type;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 Lane = 0;
 
-    UPROPERTY(BlueprintReadWrite)
-    float Duration;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString Type = TEXT("tap");
 
-    bool bSpawned = false;
+	UPROPERTY(Transient)
+	bool bSpawned = false;
+};
+
+
+USTRUCT(BlueprintType)
+struct FChartData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<FNoteData> Notes;
 };

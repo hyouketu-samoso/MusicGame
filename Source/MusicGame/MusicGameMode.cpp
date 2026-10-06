@@ -1,44 +1,113 @@
 #include "MusicGameMode.h"
+
 #include "ChartImporter.h"
 #include "NoteManager.h"
+
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
 #include "Components/AudioComponent.h"
+#include "Misc/Paths.h"
+
+
+AMusicGameMode::AMusicGameMode()
+{
+}
 
 void AMusicGameMode::BeginPlay()
 {
-    Super::BeginPlay();
+	Super::BeginPlay();
 
-    // JSON 読み込み
-    UChartImporter* Importer = NewObject<UChartImporter>();
-    Importer->LoadChart(FPaths::ProjectContentDir() / TEXT("Chart/chart.json"), Notes);
+	UE_LOG(
+		LogTemp,
+		Error,
+		TEXT("========== MusicGameMode BeginPlay ==========")
+	);
 
-    // NoteManager 生成
-    NoteManager = GetWorld()->SpawnActor<ANoteManager>();
-    NoteManager->InitNotes(Notes);
+	// ========================================
+	// 譜面読み込み
+	// ========================================
 
-    PrimaryActorTick.bCanEverTick = true;
+	UChartImporter* Importer =
+		NewObject<UChartImporter>();
 
-    // 曲の再生
-    MusicAudioComponent = UGameplayStatics::SpawnSoundAttached(
-        MusicSound,
-        GetRootComponent()
-    );
+	if (!Importer)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("MusicGameMode: ChartImporter生成失敗")
+		);
 
-    // ★ 曲の再生開始時間を記録（Quartz の代わり）
-    StartTime = UGameplayStatics::GetTimeSeconds(GetWorld());
+		return;
+	}
+
+	const bool bLoaded =
+		Importer->LoadChart(
+			FPaths::ProjectContentDir() /
+			TEXT("Chart/chart.json"),
+			Notes
+		);
+
+	UE_LOG(
+		LogTemp,
+		Error,
+		TEXT("MusicGameMode: Chart Load=%s Notes=%d"),
+		bLoaded ? TEXT("SUCCESS") : TEXT("FAILED"),
+		Notes.Num()
+	);
+
+	// ========================================
+	// NoteManager生成
+	// ========================================
+
+	NoteManager =
+		GetWorld()->SpawnActor<ANoteManager>();
+
+	if (!NoteManager)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("MusicGameMode: NoteManager生成失敗")
+		);
+
+		return;
+	}
+
+	NoteManager->InitNotes(Notes);
+
+	// ========================================
+	// 音楽開始
+	// ========================================
+
+	MusicAudioComponent =
+		UGameplayStatics::SpawnSoundAttached(
+			MusicSound,
+			GetRootComponent()
+		);
+
+	StartTime =
+		UGameplayStatics::GetTimeSeconds(
+			GetWorld()
+		);
+
+	// ========================================
+	// 譜面開始
+	// ========================================
+
+	UE_LOG(
+		LogTemp,
+		Error,
+		TEXT("MusicGameMode: NoteManager->StartChart() を呼びます")
+	);
+
+	NoteManager->StartChart();
+
+	// Tick有効化
+	PrimaryActorTick.bCanEverTick = true;
 }
 
 void AMusicGameMode::Tick(float DeltaSeconds)
 {
-    Super::Tick(DeltaSeconds);
-
-    if (!NoteManager || !MusicAudioComponent) return;
-
-    // ★ 現在の曲の経過時間（Quartz の代わり）
-    const float Now = UGameplayStatics::GetTimeSeconds(GetWorld());
-    const float CurrentTime = Now - StartTime;
-
-    // ノーツ生成
-    NoteManager->UpdateSpawn(CurrentTime, SpawnOffset);
+	Super::Tick(DeltaSeconds);
 }
