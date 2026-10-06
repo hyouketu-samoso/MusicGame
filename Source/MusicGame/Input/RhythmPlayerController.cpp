@@ -39,7 +39,7 @@ void ARhythmPlayerController::TogglePause()
 void ARhythmPlayerController::OpenPause()
 {
 	if (bIsPaused) return;
-
+	
 	// Widgetがまだ無ければ作る
 	if (!PauseWidget && PauseWidgetClass)
 	{
