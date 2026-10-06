@@ -37,7 +37,12 @@ protected:
 	UPROPERTY(EditAnywhere,BlueprintReadOnly,Category = "Menu")
 	FName InitialButtonName = NAME_None;
 
+	// フォーカスが別のボタンに移った瞬間に呼ばれる(パッドの十字キー/スティック用)
+	UFUNCTION(BlueprintImplementableEvent,Category = "Menu")
+	void OnMenuButtonFocused(UButton* FocusedButton);
+
 private:
 	UPROPERTY()
 	TArray<TObjectPtr<UButton>> MenuButtons;
+	TWeakObjectPtr<UButton> LastFocusedButton;
 };

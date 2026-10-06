@@ -48,10 +48,16 @@ void UMenuWidgetBase::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	// 選択中のButtonだけ色を変える(ポーズ中もUMGのTickは動く)
 	for (UButton* Button : MenuButtons)
 	{
-		if (Button)
+		if (!Button) continue;
+
+		const bool bFocused = Button->HasKeyboardFocus();
+		Button->SetBackgroundColor(bFocused ? SelectedColor : NormalColor);
+
+		// フォーカスが新しく移ったら、ブループリントへ通知する
+		if (bFocused && LastFocusedButton.Get() != Button)
 		{
-			Button->SetBackgroundColor(
-				Button->HasKeyboardFocus() ? SelectedColor : NormalColor);
+			LastFocusedButton = Button;
+			OnMenuButtonFocused(Button);
 		}
 	}
 }
