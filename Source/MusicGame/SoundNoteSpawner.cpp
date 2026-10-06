@@ -2,285 +2,286 @@
 
 #include "SoundNoteActor.h"
 #include "HoldNoteActor.h"
-#include "RhythmJudge.h"
 
 #include "TimerManager.h"
-#include "Components/ArrowComponent.h"
 #include "Engine/World.h"
+
 
 ASoundNoteSpawner::ASoundNoteSpawner()
 {
-	PrimaryActorTick.bCanEverTick = false;
+    PrimaryActorTick.bCanEverTick = false;
 
-#if WITH_EDITORONLY_DATA
-
-	Arrow =
-		CreateDefaultSubobject<UArrowComponent>(
-			TEXT("Arrow")
-		);
-
-	RootComponent = Arrow;
-
-#endif
-
-	// 4レーン
-	LaneColors.SetNum(4);
+    // 4レーン
+    LaneColors.SetNum(4);
 }
+
 
 void ASoundNoteSpawner::BeginPlay()
 {
-	Super::BeginPlay();
+    Super::BeginPlay();
 
-	if (bAutoSpawn)
-	{
-		GetWorldTimerManager().SetTimer(
-			AutoSpawnTimer,
-			this,
-			&ASoundNoteSpawner::SpawnWave,
-			SpawnInterval,
-			true
-		);
-	}
+    if (bAutoSpawn)
+    {
+        GetWorldTimerManager().SetTimer(
+            AutoSpawnTimer,
+            this,
+            &ASoundNoteSpawner::SpawnWave,
+            SpawnInterval,
+            true
+        );
+    }
 }
+
 
 void ASoundNoteSpawner::SpawnWave()
 {
-	for (
-		int32 LaneIndex = 0;
-		LaneIndex < 4;
-		++LaneIndex
-		)
-	{
-		SpawnNote(LaneIndex);
-	}
+    for (
+        int32 LaneIndex = 0;
+        LaneIndex < 4;
+        ++LaneIndex
+        )
+    {
+        SpawnNote(LaneIndex);
+    }
 }
+
 
 void ASoundNoteSpawner::SpawnNote(
-	int32 LaneIndex
+    int32 LaneIndex
 )
 {
-	if (!LaneColors.IsValidIndex(LaneIndex))
-	{
-		return;
-	}
+    if (!LaneColors.IsValidIndex(LaneIndex))
+    {
+        return;
+    }
 
-	FNoteData TestNote;
+    FNoteData TestNote;
 
-	TestNote.Lane = LaneIndex;
-	TestNote.Type = TEXT("tap");
-	TestNote.Duration = 0.0f;
+    TestNote.Lane = LaneIndex;
+    TestNote.Type = TEXT("tap");
+    TestNote.Duration = 0.0f;
 
-	SpawnNoteFromData(TestNote);
+    SpawnNoteFromData(TestNote);
 }
+
 
 ASoundNoteActor*
 ASoundNoteSpawner::SpawnNoteFromData(
-	const FNoteData& NoteData
+    const FNoteData& NoteData
 )
 {
-	if (!GetWorld())
-	{
-		return nullptr;
-	}
+    if (!GetWorld())
+    {
+        return nullptr;
+    }
 
-	// ========================================
-	// レーンチェック
-	// ========================================
 
-	if (!LaneColors.IsValidIndex(NoteData.Lane))
-	{
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT(
-				"NoteSpawner: Invalid LaneIndex = %d"
-			),
-			NoteData.Lane
-		);
+    // ========================================
+    // レーンチェック
+    // ========================================
 
-		return nullptr;
-	}
+    if (!LaneColors.IsValidIndex(NoteData.Lane))
+    {
+        UE_LOG(
+            LogTemp,
+            Warning,
+            TEXT(
+                "NoteSpawner: Invalid LaneIndex = %d"
+            ),
+            NoteData.Lane
+        );
 
-	// ========================================
-	// ノーツタイプからクラスを決定
-	// ========================================
+        return nullptr;
+    }
 
-	TSubclassOf<ASoundNoteActor> SpawnClass =
-		GetNoteClassForType(
-			NoteData.Type
-		);
 
-	if (!SpawnClass)
-	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT(
-				"NoteSpawner: No class for note type = %s"
-			),
-			*NoteData.Type
-		);
+    // ========================================
+    // ノーツタイプからクラスを決定
+    // ========================================
 
-		return nullptr;
-	}
+    TSubclassOf<ASoundNoteActor> SpawnClass =
+        GetNoteClassForType(
+            NoteData.Type
+        );
 
-	// ========================================
-	// 判定ライン位置
-	// ========================================
+    if (!SpawnClass)
+    {
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT(
+                "NoteSpawner: No class for note type = %s"
+            ),
+            *NoteData.Type
+        );
 
-	const FVector TargetLocation =
-		GetLaneTarget(
-			NoteData.Lane
-		);
+        return nullptr;
+    }
 
-	// ========================================
-	// 出現位置
-	// ========================================
 
-	FVector SpawnLocation =
-		TargetLocation +
-		GetActorForwardVector() *
-		SpawnDistance;
+    // ========================================
+    // 判定ライン位置
+    // ========================================
 
-	SpawnLocation.Z += SpawnHeight;
+    const FVector TargetLocation =
+        GetLaneTarget(
+            NoteData.Lane
+        );
 
-	// ========================================
-	// Spawn設定
-	// ========================================
 
-	FActorSpawnParameters Params;
+    // ========================================
+    // 出現位置
+    // ========================================
 
-	Params.Owner = this;
+    FVector SpawnLocation =
+        TargetLocation +
+        GetActorForwardVector() *
+        SpawnDistance;
 
-	Params.SpawnCollisionHandlingOverride =
-		ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+    SpawnLocation.Z += SpawnHeight;
 
-	// ========================================
-	// Actor生成
-	// ========================================
 
-	ASoundNoteActor* Note =
-		GetWorld()->SpawnActor<ASoundNoteActor>(
-			SpawnClass,
-			SpawnLocation,
-			FRotator::ZeroRotator,
-			Params
-		);
+    // ========================================
+    // Spawn設定
+    // ========================================
 
-	if (!Note)
-	{
-		return nullptr;
-	}
+    FActorSpawnParameters Params;
 
-	// ========================================
-	// ホールド設定
-	// ========================================
+    Params.Owner = this;
 
-	if (AHoldNoteActor* HoldNote =
-		Cast<AHoldNoteActor>(Note))
-	{
-		HoldNote->SetHoldDuration(
-			NoteData.Duration
-		);
-	}
+    Params.SpawnCollisionHandlingOverride =
+        ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	// ========================================
-	// ノーツを飛ばす
-	// ========================================
 
-	Note->Launch(
-		SpawnLocation,
-		TargetLocation,
-		ArcHeight,
-		TravelTime,
-		LaneColors[NoteData.Lane],
-		NoteData.Lane
-	);
+    // ========================================
+    // Actor生成
+    // ========================================
 
-	// ========================================
-	// RhythmJudgeへ登録
-	// ========================================
+    ASoundNoteActor* Note =
+        GetWorld()->SpawnActor<ASoundNoteActor>(
+            SpawnClass,
+            SpawnLocation,
+            FRotator::ZeroRotator,
+            Params
+        );
 
-	if (RhythmJudge)
-	{
-		RhythmJudge->RegisterNote(Note);
-	}
-	else
-	{
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT(
-				"NoteSpawner: RhythmJudge is not set."
-			)
-		);
-	}
+    if (!Note)
+    {
+        return nullptr;
+    }
 
-	return Note;
+
+    // ========================================
+    // ホールド設定
+    // ========================================
+
+    if (AHoldNoteActor* HoldNote =
+        Cast<AHoldNoteActor>(Note))
+    {
+        HoldNote->SetHoldDuration(
+            NoteData.Duration
+        );
+    }
+
+
+    // ========================================
+    // ノーツを飛ばす
+    // ========================================
+
+    Note->Launch(
+        SpawnLocation,
+        TargetLocation,
+        ArcHeight,
+        TravelTime,
+        LaneColors[NoteData.Lane]
+    );
+
+
+    // ========================================
+    // Spawn成功
+    // ========================================
+
+    UE_LOG(
+        LogTemp,
+        Log,
+        TEXT(
+            "NoteSpawner: Spawned Note Lane=%d Type=%s"
+        ),
+        NoteData.Lane,
+        *NoteData.Type
+    );
+
+    return Note;
 }
+
 
 TSubclassOf<ASoundNoteActor>
 ASoundNoteSpawner::GetNoteClassForType(
-	const FString& Type
+    const FString& Type
 ) const
 {
-	if (
-		Type.Equals(
-			TEXT("tap"),
-			ESearchCase::IgnoreCase
-		)
-		)
-	{
-		if (TapNoteClass)
-		{
-			return TapNoteClass;
-		}
-	}
+    if (
+        Type.Equals(
+            TEXT("tap"),
+            ESearchCase::IgnoreCase
+        )
+        )
+    {
+        if (TapNoteClass)
+        {
+            return TapNoteClass;
+        }
+    }
 
-	if (
-		Type.Equals(
-			TEXT("flick"),
-			ESearchCase::IgnoreCase
-		)
-		)
-	{
-		if (FlickNoteClass)
-		{
-			return FlickNoteClass;
-		}
-	}
 
-	if (
-		Type.Equals(
-			TEXT("hold"),
-			ESearchCase::IgnoreCase
-		)
-		)
-	{
-		if (HoldNoteClass)
-		{
-			return HoldNoteClass;
-		}
-	}
+    if (
+        Type.Equals(
+            TEXT("flick"),
+            ESearchCase::IgnoreCase
+        )
+        )
+    {
+        if (FlickNoteClass)
+        {
+            return FlickNoteClass;
+        }
+    }
 
-	// 専用クラスがない場合
-	// 共通クラスを使用
-	return NoteClass;
+
+    if (
+        Type.Equals(
+            TEXT("hold"),
+            ESearchCase::IgnoreCase
+        )
+        )
+    {
+        if (HoldNoteClass)
+        {
+            return HoldNoteClass;
+        }
+    }
+
+
+    // 専用クラスがない場合
+    // 共通クラスを使用
+
+    return NoteClass;
 }
 
+
 FVector ASoundNoteSpawner::GetLaneTarget(
-	int32 LaneIndex
+    int32 LaneIndex
 ) const
 {
-	const float Offset =
-		(
-			LaneIndex -
-			(LaneColors.Num() - 1) * 0.5f
-			) *
-		LaneSpacing;
+    const float Offset =
+        (
+            LaneIndex -
+            (LaneColors.Num() - 1) * 0.5f
+            ) *
+        LaneSpacing;
 
-	return
-		GetActorLocation() +
-		GetActorRightVector() *
-		Offset;
+    return
+        GetActorLocation() +
+        GetActorRightVector() *
+        Offset;
 }
