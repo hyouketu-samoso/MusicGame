@@ -1,6 +1,7 @@
 ﻿// 判定役のActor。レーンの入力を受け取り、飛んでいるノーツとのタイミングのズレから判定を決める。
 // レーンは4本（0=左外側 / 1=左内側 / 2=右内側 / 3=右外側）。
-// プレイヤーコントローラーに入力コンポーネント（URhythmInputComponent）があれば、押下はそちらから受け取る。
+// プレイヤーコントローラーに入力コンポーネント（URhythmInputComponent）があれば、押した・離したはそちらから受け取る。
+// 入力コンポーネントの「ホールド」通知（一定時間押し続けた）は入力の状態なので、判定には使わない。
 // スコア・コンボ・体力は ScoreComponent（URhythmScoreComponent）で管理する。
 // ホールドノーツは「始点を押したとき」と「終点で離したとき」の2回判定する。
 
@@ -36,13 +37,17 @@ public:
 	// 判定対象としてノーツを登録する（ノーツをSpawnした側が呼ぶ）
 	void RegisterNote(ANoteActor* Note);
 
-	// レーンが押されたときの処理（キー入力以外、タッチやUIボタンからも呼べる）
+	// レーンが押されたときの処理（現在時刻で判定。タッチやUIボタンからも呼べる）
 	UFUNCTION(BlueprintCallable, Category="Rhythm Judge")
 	void PressLane(int32 LaneIndex);
 
-	// レーンが離されたときの処理（ホールドの終点判定に使う）
+	// レーンが離されたときの処理（現在時刻で判定。ホールドの終点判定に使う）
 	UFUNCTION(BlueprintCallable, Category="Rhythm Judge")
 	void ReleaseLane(int32 LaneIndex);
+
+	// 入力時刻を指定して押した・離したを処理する（入力コンポーネントの Timestamp を使うとき）
+	void PressLaneAt(int32 LaneIndex, double InputTime);
+	void ReleaseLaneAt(int32 LaneIndex, double InputTime);
 
 	// スコア・コンボ・体力をリセットする
 	UFUNCTION(BlueprintCallable, Category="Rhythm Judge")
@@ -77,7 +82,7 @@ protected:
 	TObjectPtr<URhythmScoreComponent> ScoreComponent;
 
 	// レーンごとのキー（要素番号 = レーン番号）。入力コンポーネント（URhythmInputComponent）と同じ D / F / J / K。
-	// 入力コンポーネントがあるときは、ここではホールドの「離した」だけを受け取る（押下は入力コンポーネントから）
+	// 入力コンポーネントが無いとき（テスト用の別レベルなど）だけ使う。あるときはキーの割り当ては入力コンポーネント側
 	UPROPERTY(EditAnywhere, Category="Rhythm Judge|Input")
 	TArray<FKey> LaneKeys;
 
@@ -115,6 +120,10 @@ private:
 	// 入力コンポーネントからのレーン入力（キーボード D/F/J/K・スティック弾き）
 	UFUNCTION()
 	void HandleLaneInput(const FLaneInput& Input);
+
+	// 入力コンポーネントからのレーンを離した通知（キーボード・スティック）
+	UFUNCTION()
+	void HandleLaneRelease(const FLaneInput& Input);
 
 	// スコア・体力をデバッグ表示する
 	void ShowDebugStatus() const;

@@ -1,6 +1,7 @@
 ﻿// テスト用ノーツ発射台。レベルに置くと、一定間隔でノーツを飛ばす（全レーン同時 / ランダムなレーンに1個）。
 // このActorの位置が「判定ラインの中心」、Actorの前方（X+）の奥からノーツが飛んでくる。
 // プレイヤー（カメラ）はこのActorの後ろに立ち、前方を向いて見る想定。
+// bAutoCamera がオンなら、このActorに付いたカメラ（判定ラインの後ろ・上）の視点で Play が始まる。
 
 #pragma once
 
@@ -12,6 +13,7 @@ class ANoteActor;
 class AHoldNoteActor;
 class ARhythmJudge;
 class UArrowComponent;
+class UCameraComponent;
 
 // 自動発射の出し方
 UENUM(BlueprintType)
@@ -51,9 +53,36 @@ public:
 	// 判定ラインをエディタのビューポートでも表示するため、プレイ中以外もTickさせる
 	virtual bool ShouldTickIfViewportsOnly() const override { return bShowJudgeLine; }
 
+	// 詳細パネルで値を変えたとき、カメラの位置をエディタ上でも反映する
+	virtual void OnConstruction(const FTransform& Transform) override;
+
 protected:
 
 	virtual void BeginPlay() override;
+
+	// 判定ラインを映すカメラ。位置・向きは下の Camera の設定から自動で決まる
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Note Spawner|Camera")
+	TObjectPtr<UCameraComponent> Camera;
+
+	// true なら Play 開始時にこのカメラの視点に切り替える
+	UPROPERTY(EditAnywhere, Category="Note Spawner|Camera")
+	bool bAutoCamera = true;
+
+	// 判定ラインからカメラまでの距離（後ろ方向、cm）
+	UPROPERTY(EditAnywhere, Category="Note Spawner|Camera", meta=(Units="cm", EditCondition="bAutoCamera"))
+	float CameraDistance = 700.0f;
+
+	// 判定ラインからのカメラの高さ（cm）
+	UPROPERTY(EditAnywhere, Category="Note Spawner|Camera", meta=(Units="cm", EditCondition="bAutoCamera"))
+	float CameraHeight = 400.0f;
+
+	// カメラの上下の向き（度）。マイナスで見下ろす
+	UPROPERTY(EditAnywhere, Category="Note Spawner|Camera", meta=(ClampMin=-89.0, ClampMax=89.0, Units="deg", EditCondition="bAutoCamera"))
+	float CameraPitch = -15.0f;
+
+	// 視野角（左右、度）。小さいほどズーム
+	UPROPERTY(EditAnywhere, Category="Note Spawner|Camera", meta=(ClampMin=10.0, ClampMax=170.0, Units="deg", EditCondition="bAutoCamera"))
+	float CameraFieldOfView = 90.0f;
 
 	// 飛ばすノーツのクラス（BPで見た目を変えたい場合に差し替える）
 	UPROPERTY(EditAnywhere, Category="Note Spawner")
@@ -71,7 +100,12 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Note Spawner")
 	TArray<FLinearColor> LaneColors;
 
-	// レーンの間隔（cm）
+	// レーンごとの判定位置（このActorからの相対位置、cm）。X = 前後（マイナスで手前）、Y = 左右（マイナスで左）、Z = 上下。
+	// 要素数がレーン数と同じときに使う。空にすると LaneSpacing 間隔の横一列になる
+	UPROPERTY(EditAnywhere, Category="Note Spawner")
+	TArray<FVector> LaneTargetOffsets;
+
+	// レーンの間隔（cm）。LaneTargetOffsets が空のときだけ使う
 	UPROPERTY(EditAnywhere, Category="Note Spawner", meta=(Units="cm"))
 	float LaneSpacing = 150.0f;
 
@@ -138,6 +172,12 @@ private:
 
 	// 判定ラインを描画する
 	void DrawJudgeLine() const;
+
+	// Camera の設定値をカメラの位置・向き・視野角に反映する
+	void UpdateCameraTransform();
+
+	// プレイヤーの視点をこのActorのカメラに切り替える
+	void ActivateAutoCamera();
 
 	// ノーツを生成して飛ばす（HoldDuration > 0 ならホールド）
 	void SpawnNoteInternal(TSubclassOf<ANoteActor> Class, int32 LaneIndex, float HoldDuration);

@@ -3,6 +3,8 @@
 #include "HoldNoteActor.h"
 #include "RhythmJudge.h"
 #include "Components/ArrowComponent.h"
+#include "Camera/CameraComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/SceneComponent.h"
 #include "DrawDebugHelpers.h"
@@ -25,6 +27,11 @@ ANoteSpawner::ANoteSpawner()
 	}
 #endif
 
+	// 判定ラインを映すカメラ（エディタでも位置と視野が表示される）
+	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
+	Camera->SetupAttachment(RootComponent);
+	UpdateCameraTransform();
+
 	NoteClass = ANoteActor::StaticClass();
 	HoldNoteClass = AHoldNoteActor::StaticClass();
 
@@ -34,6 +41,16 @@ ANoteSpawner::ANoteSpawner()
 		FLinearColor(0.1f, 0.3f, 1.0f),
 		FLinearColor(1.0f, 0.2f, 0.8f),
 		FLinearColor(1.0f, 0.85f, 0.1f),
+	};
+
+	// プレイ画面UI（WBP_GameMain）の判定バー4本に重なる位置。内側のレーンほど手前の V 字。
+	// カメラが初期値（距離 700・高さ 400・角度 −15°・視野角 90°）のときに合わせた値なので、
+	// カメラを変えたらこちらも合わせ直す
+	LaneTargetOffsets = {
+		FVector( -60.0f, -300.0f, 0.0f),
+		FVector(-205.0f,  -90.0f, 0.0f),
+		FVector(-205.0f,   90.0f, 0.0f),
+		FVector( -60.0f,  300.0f, 0.0f),
 	};
 }
 
@@ -55,6 +72,41 @@ void ANoteSpawner::BeginPlay()
 	{
 		GetWorldTimerManager().SetTimer(AutoSpawnTimer, this, &ANoteSpawner::AutoSpawn, SpawnInterval, true, 0.5f);
 	}
+
+	if (bAutoCamera)
+	{
+		// プレイヤーのポーン所持などで視点が後から上書きされないよう、1フレーム待ってから切り替える
+		GetWorldTimerManager().SetTimerForNextTick(this, &ANoteSpawner::ActivateAutoCamera);
+	}
+}
+
+void ANoteSpawner::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+
+	UpdateCameraTransform();
+}
+
+void ANoteSpawner::UpdateCameraTransform()
+{
+	// 判定ラインの中心（このActorの位置）から、後ろへ CameraDistance・上へ CameraHeight の位置
+	Camera->SetRelativeLocationAndRotation(FVector(-CameraDistance, 0.0f, CameraHeight), FRotator(CameraPitch, 0.0f, 0.0f));
+	Camera->SetFieldOfView(CameraFieldOfView);
+}
+
+void ANoteSpawner::ActivateAutoCamera()
+{
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	if (!PC)
+	{
+		return;
+	}
+
+	// ポーンの所持やカメラの自動切り替えで視点が戻されないようにする
+	PC->bAutoManageActiveCameraTarget = false;
+
+	// ビューターゲットにすると、このActorの Camera コンポーネントの視点になる
+	PC->SetViewTarget(this);
 }
 
 void ANoteSpawner::Tick(float DeltaTime)
@@ -195,7 +247,13 @@ void ANoteSpawner::SpawnNoteInternal(TSubclassOf<ANoteActor> Class, int32 LaneIn
 
 FVector ANoteSpawner::GetLaneTarget(int32 LaneIndex) const
 {
-	// レーンを中央揃えで左右に並べる（4レーンなら -1.5, -0.5, 0.5, 1.5 × LaneSpacing。レーン 0 が左端）
+	// レーンごとの判定位置が設定されていればそれを使う（スポナーの向きに合わせて回転）
+	if (LaneTargetOffsets.Num() == LaneColors.Num() && LaneTargetOffsets.IsValidIndex(LaneIndex))
+	{
+		return GetActorLocation() + GetActorQuat().RotateVector(LaneTargetOffsets[LaneIndex]);
+	}
+
+	// 無ければレーンを中央揃えで左右に並べる（4レーンなら -1.5, -0.5, 0.5, 1.5 × LaneSpacing。レーン 0 が左端）
 	const float Offset = (LaneIndex - (LaneColors.Num() - 1) * 0.5f) * LaneSpacing;
 	return GetActorLocation() + GetActorRightVector() * Offset;
 }
@@ -209,12 +267,12 @@ void ANoteSpawner::DrawJudgeLine() const
 	}
 
 	const UWorld* World = GetWorld();
-	const FVector Right = GetActorRightVector();
 
-	// 端のレーンから端のレーンまで横に1本線を引く
-	const FVector LineStart = GetLaneTarget(0) - Right * LaneSpacing * 0.5f;
-	const FVector LineEnd = GetLaneTarget(LaneNum - 1) + Right * LaneSpacing * 0.5f;
-	DrawDebugLine(World, LineStart, LineEnd, FColor::White, false, -1.0f, 0, 2.0f);
+	// となりのレーンの判定位置どうしを線でつなぐ（横一列でも V 字でも同じ）
+	for (int32 Lane = 0; Lane + 1 < LaneNum; ++Lane)
+	{
+		DrawDebugLine(World, GetLaneTarget(Lane), GetLaneTarget(Lane + 1), FColor::White, false, -1.0f, 0, 2.0f);
+	}
 
 	// 飛ばすノーツの形（クラスの初期値）から輪郭を取り、各レーンの判定位置に描く。
 	// ノーツがこの枠にぴったり重なった瞬間がパーフェクト

@@ -28,33 +28,34 @@ void ARhythmJudge::BeginPlay()
 
 	ShowDebugStatus();
 
-	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	if (!PC)
 	{
-		// 入力コンポーネント（キーボード・スティック弾き → 4レーン）があれば、押下はそこから受け取る
-		URhythmInputComponent* RhythmInput = PC->FindComponentByClass<URhythmInputComponent>();
-		if (RhythmInput)
-		{
-			RhythmInput->OnLaneInput.AddDynamic(this, &ARhythmJudge::HandleLaneInput);
-		}
+		return;
+	}
 
-		// プレイヤーのキー入力をこのActorでも受け取れるようにする
-		EnableInput(PC);
+	// 入力コンポーネント（キーボード・スティック弾き → 4レーン）があれば、押した・離したはそこから受け取る。
+	// キーの割り当てや入力時刻は入力コンポーネント側に一本化し、ここでは自分でキーを受け取らない
+	if (URhythmInputComponent* RhythmInput = PC->FindComponentByClass<URhythmInputComponent>())
+	{
+		RhythmInput->OnLaneInput.AddDynamic(this, &ARhythmJudge::HandleLaneInput);
+		RhythmInput->OnLaneRelease.AddDynamic(this, &ARhythmJudge::HandleLaneRelease);
+		return;
+	}
 
-		for (int32 Lane = 0; Lane < LaneKeys.Num(); ++Lane)
-		{
-			// キーごとに「どのレーンか」を付けて PressLane / ReleaseLane に繋ぐ。
-			// 入力コンポーネントがあるときに押下も繋ぐと、1回の押下が2回判定されるので繋がない
-			if (!RhythmInput)
-			{
-				FInputKeyBinding PressBinding(FInputChord(LaneKeys[Lane]), IE_Pressed);
-				PressBinding.KeyDelegate.GetDelegateForManualSet().BindUObject(this, &ARhythmJudge::PressLane, Lane);
-				InputComponent->KeyBindings.Add(PressBinding);
-			}
+	// 入力コンポーネントが無いときだけ、LaneKeys を自分で受け取る
+	EnableInput(PC);
 
-			FInputKeyBinding ReleaseBinding(FInputChord(LaneKeys[Lane]), IE_Released);
-			ReleaseBinding.KeyDelegate.GetDelegateForManualSet().BindUObject(this, &ARhythmJudge::ReleaseLane, Lane);
-			InputComponent->KeyBindings.Add(ReleaseBinding);
-		}
+	for (int32 Lane = 0; Lane < LaneKeys.Num(); ++Lane)
+	{
+		// キーごとに「どのレーンか」を付けて PressLane / ReleaseLane に繋ぐ
+		FInputKeyBinding PressBinding(FInputChord(LaneKeys[Lane]), IE_Pressed);
+		PressBinding.KeyDelegate.GetDelegateForManualSet().BindUObject(this, &ARhythmJudge::PressLane, Lane);
+		InputComponent->KeyBindings.Add(PressBinding);
+
+		FInputKeyBinding ReleaseBinding(FInputChord(LaneKeys[Lane]), IE_Released);
+		ReleaseBinding.KeyDelegate.GetDelegateForManualSet().BindUObject(this, &ARhythmJudge::ReleaseLane, Lane);
+		InputComponent->KeyBindings.Add(ReleaseBinding);
 	}
 }
 
@@ -132,13 +133,19 @@ void ARhythmJudge::RegisterNote(ANoteActor* Note)
 
 void ARhythmJudge::PressLane(int32 LaneIndex)
 {
+	PressLaneAt(LaneIndex, GetWorld()->GetTimeSeconds());
+}
+
+void ARhythmJudge::PressLaneAt(int32 LaneIndex, double InputTime)
+{
 	// ゲームオーバー後と、ホールド中のレーンは受け付けない
+	// （ポーズ明けにホールド中のレーンを押し直した場合も、ここでそのままホールド継続になる）
 	if (IsGameOver() || HoldingNotes.Contains(LaneIndex))
 	{
 		return;
 	}
 
-	const double Now = GetWorld()->GetTimeSeconds();
+	const double Now = InputTime;
 
 	// 候補：同じレーン・未判定・−BadWindow ≤ Δt ≤ +BadWindow（Δt = 入力時刻 − ノーツの判定時刻）
 	// 対象：候補のうち |Δt| が最小のノーツ。|Δt| が同じなら判定時刻が早いノーツ（入力判定仕様書「判定仕様」）
@@ -202,6 +209,11 @@ void ARhythmJudge::PressLane(int32 LaneIndex)
 
 void ARhythmJudge::ReleaseLane(int32 LaneIndex)
 {
+	ReleaseLaneAt(LaneIndex, GetWorld()->GetTimeSeconds());
+}
+
+void ARhythmJudge::ReleaseLaneAt(int32 LaneIndex, double InputTime)
+{
 	TObjectPtr<AHoldNoteActor> Hold;
 	if (!HoldingNotes.RemoveAndCopyValue(LaneIndex, Hold) || !IsValid(Hold))
 	{
@@ -210,7 +222,7 @@ void ARhythmJudge::ReleaseLane(int32 LaneIndex)
 
 	// 終点に届く時刻とのズレで判定する（押したときと同じ幅）。早すぎればミス
 	// 遅すぎる場合は離す前に Tick でミスになっている
-	const float Error = static_cast<float>(GetWorld()->GetTimeSeconds() - Hold->GetEndTime());
+	const float Error = static_cast<float>(InputTime - Hold->GetEndTime());
 	const ERhythmJudgement Judgement = CalcJudgement(FMath::Abs(Error));
 
 	ApplyJudgement(Hold, Judgement, (Judgement == ERhythmJudgement::Miss) ? 0.0f : Error, ENoteJudgePoint::HoldEnd);
@@ -290,7 +302,20 @@ void ARhythmJudge::HandleGameOver()
 
 void ARhythmJudge::HandleLaneInput(const FLaneInput& Input)
 {
-	PressLane(Input.Lane);
+	// 入力時刻は入力コンポーネントが記録したものを使う（楽曲時間への差し替えも入力側の1か所で済む）
+	PressLaneAt(Input.Lane, Input.Timestamp);
+}
+
+void ARhythmJudge::HandleLaneRelease(const FLaneInput& Input)
+{
+	// ポーズすると入力コンポーネントは押していたレーンをすべて「離した」扱いにする。
+	// これで終点が判定されないよう、ポーズ中の離しは無視してホールドを続ける
+	if (GetWorld()->IsPaused())
+	{
+		return;
+	}
+
+	ReleaseLaneAt(Input.Lane, Input.Timestamp);
 }
 
 void ARhythmJudge::ShowDebugStatus() const
