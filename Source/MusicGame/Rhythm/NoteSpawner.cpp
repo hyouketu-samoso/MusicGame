@@ -28,13 +28,12 @@ ANoteSpawner::ANoteSpawner()
 	NoteClass = ANoteActor::StaticClass();
 	HoldNoteClass = AHoldNoteActor::StaticClass();
 
-	// 緑・青・赤・黄・紫 の5レーン
+	// 4レーン（左から 左外側 / 左内側 / 右内側 / 右外側）。色はプレイ画面イメージの 水色・青・ピンク・黄
 	LaneColors = {
-		FLinearColor::Green,
-		FLinearColor::Blue,
-		FLinearColor::Red,
-		FLinearColor::Yellow,
-		FLinearColor(0.6f, 0.0f, 1.0f),
+		FLinearColor(0.0f, 0.9f, 1.0f),
+		FLinearColor(0.1f, 0.3f, 1.0f),
+		FLinearColor(1.0f, 0.2f, 0.8f),
+		FLinearColor(1.0f, 0.85f, 0.1f),
 	};
 }
 
@@ -70,6 +69,13 @@ void ANoteSpawner::Tick(float DeltaTime)
 
 void ANoteSpawner::AutoSpawn()
 {
+	// ゲームオーバーになったら発射をやめる
+	if (Judge && Judge->IsGameOver())
+	{
+		GetWorldTimerManager().ClearTimer(AutoSpawnTimer);
+		return;
+	}
+
 	switch (SpawnPattern)
 	{
 	case ENoteSpawnPattern::AllLanes:
@@ -158,7 +164,8 @@ void ANoteSpawner::SpawnNoteInternal(TSubclassOf<ANoteActor> Class, int32 LaneIn
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	ANoteActor* Note = GetWorld()->SpawnActor<ANoteActor>(Class, StartPos, FRotator::ZeroRotator, Params);
+	// ノーツの向きはスポナーに合わせる（プレートの横幅がレーンの並びの方向になる）
+	ANoteActor* Note = GetWorld()->SpawnActor<ANoteActor>(Class, StartPos, GetActorRotation(), Params);
 	if (!Note)
 	{
 		return;
@@ -188,7 +195,7 @@ void ANoteSpawner::SpawnNoteInternal(TSubclassOf<ANoteActor> Class, int32 LaneIn
 
 FVector ANoteSpawner::GetLaneTarget(int32 LaneIndex) const
 {
-	// レーンを中央揃えで左右に並べる（-2, -1, 0, 1, 2）
+	// レーンを中央揃えで左右に並べる（4レーンなら -1.5, -0.5, 0.5, 1.5 × LaneSpacing。レーン 0 が左端）
 	const float Offset = (LaneIndex - (LaneColors.Num() - 1) * 0.5f) * LaneSpacing;
 	return GetActorLocation() + GetActorRightVector() * Offset;
 }
@@ -203,17 +210,28 @@ void ANoteSpawner::DrawJudgeLine() const
 
 	const UWorld* World = GetWorld();
 	const FVector Right = GetActorRightVector();
-	const FVector Up = FVector::UpVector;
 
 	// 端のレーンから端のレーンまで横に1本線を引く
 	const FVector LineStart = GetLaneTarget(0) - Right * LaneSpacing * 0.5f;
 	const FVector LineEnd = GetLaneTarget(LaneNum - 1) + Right * LaneSpacing * 0.5f;
 	DrawDebugLine(World, LineStart, LineEnd, FColor::White, false, -1.0f, 0, 2.0f);
 
-	// 各レーンの判定位置に、こちら（カメラ側）を向いた円を描く。
-	// ノーツがこの円にぴったり重なった瞬間がパーフェクト
+	// 飛ばすノーツの形（クラスの初期値）から輪郭を取り、各レーンの判定位置に描く。
+	// ノーツがこの枠にぴったり重なった瞬間がパーフェクト
+	const ANoteActor* NoteDefaults = NoteClass ? NoteClass->GetDefaultObject<ANoteActor>() : GetDefault<ANoteActor>();
+	TArray<FVector> Outline;
+	NoteDefaults->GetPlateOutline(Outline);
+
+	const FQuat Rotation = GetActorQuat();
 	for (int32 Lane = 0; Lane < LaneNum; ++Lane)
 	{
-		DrawDebugCircle(World, GetLaneTarget(Lane), JudgeCircleRadius, 32, LaneColors[Lane].ToFColor(true), false, -1.0f, 0, 3.0f, Right, Up, false);
+		const FVector Center = GetLaneTarget(Lane);
+		const FColor Color = LaneColors[Lane].ToFColor(true);
+		for (int32 i = 0; i < Outline.Num(); ++i)
+		{
+			const FVector P0 = Center + Rotation.RotateVector(Outline[i]);
+			const FVector P1 = Center + Rotation.RotateVector(Outline[(i + 1) % Outline.Num()]);
+			DrawDebugLine(World, P0, P1, Color, false, -1.0f, 0, 3.0f);
+		}
 	}
 }

@@ -24,6 +24,7 @@ public class MusicGame : ModuleRules
             "SlateCore",
 			"Niagara",
 			"MediaAssets",
+			"ProceduralMeshComponent"
         });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });

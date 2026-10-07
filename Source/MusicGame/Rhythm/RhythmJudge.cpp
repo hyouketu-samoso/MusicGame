@@ -1,6 +1,8 @@
 ﻿#include "RhythmJudge.h"
 #include "NoteActor.h"
 #include "HoldNoteActor.h"
+#include "RhythmScoreComponent.h"
+#include "Input/RhythmInputComponent.h"
 #include "Components/InputComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -12,27 +14,42 @@ ARhythmJudge::ARhythmJudge()
 
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 
-	// ThirdPersonの操作（WASD・Space・マウス）とぶつからないキーを仮置き
-	LaneKeys = { EKeys::F, EKeys::G, EKeys::H, EKeys::J, EKeys::K };
+	// 4レーン：左外側 / 左内側 / 右内側 / 右外側（入力コンポーネントと同じ割り当て）
+	LaneKeys = { EKeys::D, EKeys::F, EKeys::J, EKeys::K };
 
-	JudgementCounts.Init(0, StaticEnum<ERhythmJudgement>()->NumEnums() - 1);
+	ScoreComponent = CreateDefaultSubobject<URhythmScoreComponent>(TEXT("Score"));
 }
 
 void ARhythmJudge::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// プレイヤーのキー入力をこのActorでも受け取れるようにする
+	ScoreComponent->OnGameOver.AddDynamic(this, &ARhythmJudge::HandleGameOver);
+
+	ShowDebugStatus();
+
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
+		// 入力コンポーネント（キーボード・スティック弾き → 4レーン）があれば、押下はそこから受け取る
+		URhythmInputComponent* RhythmInput = PC->FindComponentByClass<URhythmInputComponent>();
+		if (RhythmInput)
+		{
+			RhythmInput->OnLaneInput.AddDynamic(this, &ARhythmJudge::HandleLaneInput);
+		}
+
+		// プレイヤーのキー入力をこのActorでも受け取れるようにする
 		EnableInput(PC);
 
 		for (int32 Lane = 0; Lane < LaneKeys.Num(); ++Lane)
 		{
-			// キーごとに「どのレーンか」を付けて PressLane / ReleaseLane に繋ぐ
-			FInputKeyBinding PressBinding(FInputChord(LaneKeys[Lane]), IE_Pressed);
-			PressBinding.KeyDelegate.GetDelegateForManualSet().BindUObject(this, &ARhythmJudge::PressLane, Lane);
-			InputComponent->KeyBindings.Add(PressBinding);
+			// キーごとに「どのレーンか」を付けて PressLane / ReleaseLane に繋ぐ。
+			// 入力コンポーネントがあるときに押下も繋ぐと、1回の押下が2回判定されるので繋がない
+			if (!RhythmInput)
+			{
+				FInputKeyBinding PressBinding(FInputChord(LaneKeys[Lane]), IE_Pressed);
+				PressBinding.KeyDelegate.GetDelegateForManualSet().BindUObject(this, &ARhythmJudge::PressLane, Lane);
+				InputComponent->KeyBindings.Add(PressBinding);
+			}
 
 			FInputKeyBinding ReleaseBinding(FInputChord(LaneKeys[Lane]), IE_Released);
 			ReleaseBinding.KeyDelegate.GetDelegateForManualSet().BindUObject(this, &ARhythmJudge::ReleaseLane, Lane);
@@ -44,6 +61,11 @@ void ARhythmJudge::BeginPlay()
 void ARhythmJudge::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	if (IsGameOver())
+	{
+		return;
+	}
 
 	const double Now = GetWorld()->GetTimeSeconds();
 
@@ -71,6 +93,12 @@ void ARhythmJudge::Tick(float DeltaTime)
 			{
 				ApplyJudgement(Note, ERhythmJudgement::Miss, 0.0f, ENoteJudgePoint::Tap);
 			}
+
+			// このミスでゲームオーバーになったら、残りは HandleGameOver で片付け済み
+			if (IsGameOver())
+			{
+				return;
+			}
 		}
 	}
 
@@ -85,8 +113,8 @@ void ARhythmJudge::Tick(float DeltaTime)
 	}
 	for (int32 Lane : OverdueLanes)
 	{
-		AHoldNoteActor* Hold = HoldingNotes.FindAndRemoveChecked(Lane);
-		if (IsValid(Hold))
+		TObjectPtr<AHoldNoteActor> Hold;
+		if (HoldingNotes.RemoveAndCopyValue(Lane, Hold) && IsValid(Hold))
 		{
 			ApplyJudgement(Hold, ERhythmJudgement::Miss, 0.0f, ENoteJudgePoint::HoldEnd);
 		}
@@ -104,16 +132,18 @@ void ARhythmJudge::RegisterNote(ANoteActor* Note)
 
 void ARhythmJudge::PressLane(int32 LaneIndex)
 {
-	// ホールド中のレーンは押し直せない
-	if (HoldingNotes.Contains(LaneIndex))
+	// ゲームオーバー後と、ホールド中のレーンは受け付けない
+	if (IsGameOver() || HoldingNotes.Contains(LaneIndex))
 	{
 		return;
 	}
 
 	const double Now = GetWorld()->GetTimeSeconds();
 
-	// このレーンで判定幅に入っているノーツのうち、一番先に届くものを対象にする
+	// 候補：同じレーン・未判定・−BadWindow ≤ Δt ≤ +BadWindow（Δt = 入力時刻 − ノーツの判定時刻）
+	// 対象：候補のうち |Δt| が最小のノーツ。|Δt| が同じなら判定時刻が早いノーツ（入力判定仕様書「判定仕様」）
 	int32 TargetIndex = INDEX_NONE;
+	double TargetAbsError = 0.0;
 	for (int32 i = 0; i < ActiveNotes.Num(); ++i)
 	{
 		const ANoteActor* Note = ActiveNotes[i];
@@ -122,19 +152,22 @@ void ARhythmJudge::PressLane(int32 LaneIndex)
 			continue;
 		}
 
-		const float Error = static_cast<float>(Now - Note->GetHitTime());
-		if (FMath::Abs(Error) > BadWindow)
+		const double AbsError = FMath::Abs(Now - Note->GetHitTime());
+		if (AbsError > BadWindow)
 		{
 			continue;
 		}
 
-		if (TargetIndex == INDEX_NONE || Note->GetHitTime() < ActiveNotes[TargetIndex]->GetHitTime())
+		const bool bCloser = AbsError < TargetAbsError;
+		const bool bSameButEarlier = (AbsError == TargetAbsError) && Note->GetHitTime() < ActiveNotes[TargetIndex]->GetHitTime();
+		if (TargetIndex == INDEX_NONE || bCloser || bSameButEarlier)
 		{
 			TargetIndex = i;
+			TargetAbsError = AbsError;
 		}
 	}
 
-	// 判定幅に何も無いときの空押しは無視する
+	// 候補なしは空打ち。ノーツ・スコア・コンボ・体力は変えない（Δt < −BadWindow の早すぎる入力もここ）
 	if (TargetIndex == INDEX_NONE)
 	{
 		return;
@@ -150,7 +183,16 @@ void ARhythmJudge::PressLane(int32 LaneIndex)
 	{
 		// ホールドは始点の判定を出して、離すまで押し続けの状態にする
 		ApplyJudgement(Hold, Judgement, Error, ENoteJudgePoint::HoldStart);
-		HoldingNotes.Add(LaneIndex, Hold);
+
+		// 始点の Bad でゲームオーバーになった場合は、押し続けにせず手放す
+		if (IsGameOver())
+		{
+			Hold->Abandon();
+		}
+		else
+		{
+			HoldingNotes.Add(LaneIndex, Hold);
+		}
 	}
 	else
 	{
@@ -185,24 +227,25 @@ ERhythmJudgement ARhythmJudge::CalcJudgement(float AbsError) const
 
 void ARhythmJudge::ApplyJudgement(ANoteActor* Note, ERhythmJudgement Judgement, float TimingError, ENoteJudgePoint Point)
 {
-	// グッド以上でコンボ継続、バット以下で途切れる
-	if (KeepsCombo(Judgement))
+	// ゲームオーバー後に来た判定（ホールドの終点ミスなど）は反映せず、ノーツを手放すだけ
+	if (IsGameOver())
 	{
-		++Combo;
-		MaxCombo = FMath::Max(MaxCombo, Combo);
+		Note->Abandon();
+		return;
 	}
-	else
-	{
-		Combo = 0;
-	}
-
-	++JudgementCounts[static_cast<int32>(Judgement)];
 
 	const int32 LaneIndex = Note->GetLaneIndex();
 
 	Note->OnJudged(Judgement, Point);
 
+	// コンボ → スコア → 体力 の順に更新。体力が 0 になるとここで HandleGameOver が呼ばれる
+	ScoreComponent->AddJudgement(Judgement);
+
+	const int32 Combo = ScoreComponent->GetCombo();
+
 	OnNoteJudged.Broadcast(Judgement, LaneIndex, TimingError, Combo, Point);
+
+	ShowDebugStatus();
 
 	if (bShowDebugText && GEngine)
 	{
@@ -218,18 +261,74 @@ void ARhythmJudge::ApplyJudgement(ANoteActor* Note, ERhythmJudgement Judgement, 
 	}
 }
 
+void ARhythmJudge::HandleGameOver()
+{
+	// 判定待ち・ホールド中のノーツを手放す（そのまま飛んでいって消える）
+	for (ANoteActor* Note : ActiveNotes)
+	{
+		if (IsValid(Note))
+		{
+			Note->Abandon();
+		}
+	}
+	ActiveNotes.Reset();
+
+	for (const TPair<int32, TObjectPtr<AHoldNoteActor>>& Pair : HoldingNotes)
+	{
+		if (IsValid(Pair.Value))
+		{
+			Pair.Value->Abandon();
+		}
+	}
+	HoldingNotes.Reset();
+
+	if (bShowDebugText && GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(3, 10.0f, FColor::Red, TEXT("GAME OVER"), true, FVector2D(4.0f, 4.0f));
+	}
+}
+
+void ARhythmJudge::HandleLaneInput(const FLaneInput& Input)
+{
+	PressLane(Input.Lane);
+}
+
+void ARhythmJudge::ShowDebugStatus() const
+{
+	if (!bShowDebugText || !GEngine)
+	{
+		return;
+	}
+
+	// キー 2 番を使い回して、スコアと体力を常に表示する
+	GEngine->AddOnScreenDebugMessage(2, 3600.0f, FColor::White,
+		FString::Printf(TEXT("SCORE %.2f   HP %.0f / %.0f   MAX COMBO %d"),
+			ScoreComponent->GetDisplayScore(), ScoreComponent->GetHealth(), ScoreComponent->GetMaxHealth(), ScoreComponent->GetMaxCombo()),
+		true, FVector2D(1.5f, 1.5f));
+}
+
 void ARhythmJudge::ResetResult()
 {
-	Combo = 0;
-	MaxCombo = 0;
-	for (int32& Count : JudgementCounts)
-	{
-		Count = 0;
-	}
+	ScoreComponent->ResetResult();
+	ShowDebugStatus();
+}
+
+int32 ARhythmJudge::GetCombo() const
+{
+	return ScoreComponent->GetCombo();
+}
+
+int32 ARhythmJudge::GetMaxCombo() const
+{
+	return ScoreComponent->GetMaxCombo();
 }
 
 int32 ARhythmJudge::GetJudgementCount(ERhythmJudgement Judgement) const
 {
-	const int32 Index = static_cast<int32>(Judgement);
-	return JudgementCounts.IsValidIndex(Index) ? JudgementCounts[Index] : 0;
+	return ScoreComponent->GetJudgementCount(Judgement);
+}
+
+bool ARhythmJudge::IsGameOver() const
+{
+	return ScoreComponent->IsGameOver();
 }

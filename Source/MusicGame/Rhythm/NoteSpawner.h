@@ -67,7 +67,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Note Spawner")
 	TObjectPtr<ARhythmJudge> Judge;
 
-	// レーンごとの色。要素数 = レーン数 
+	// レーンごとの色。要素数 = レーン数（4）。判定役の LaneKeys と数を合わせる
 	UPROPERTY(EditAnywhere, Category="Note Spawner")
 	TArray<FLinearColor> LaneColors;
 
@@ -118,13 +118,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Note Spawner|Test", meta=(ClampMin=0.0, Units="s", EditCondition="bAutoSpawn"))
 	float MinLaneGap = 0.3f;
 
-	// パーフェクトの位置（ノーツが判定ラインに届く位置）を線と円で表示する（仮表示）
+	// パーフェクトの位置（ノーツが判定ラインに届く位置）を、線とノーツと同じ形の枠で表示する（仮表示）
 	UPROPERTY(EditAnywhere, Category="Note Spawner|Debug")
 	bool bShowJudgeLine = true;
-
-	// 判定位置に表示する円の半径（ノーツの半径は 25cm）
-	UPROPERTY(EditAnywhere, Category="Note Spawner|Debug", meta=(ClampMin=1.0, Units="cm", EditCondition="bShowJudgeLine"))
-	float JudgeCircleRadius = 35.0f;
 
 #if WITH_EDITORONLY_DATA
 	// エディタ上でノーツの飛んでくる向きを表示する矢印 

@@ -1,4 +1,6 @@
 ﻿// ノーツ1個分のActor。出現地点から判定地点まで放物線を描いて飛ぶ。
+// 見た目は横長の六角形プレート（仮の形をプログラムで作る）。
+// Mesh に Static Mesh を設定すると、仮の形の代わりにそのモデルを使う。
 
 #pragma once
 
@@ -8,6 +10,9 @@
 #include "NoteActor.generated.h"
 
 class UStaticMeshComponent;
+class UProceduralMeshComponent;
+class UMaterialInterface;
+class UMeshComponent;
 
 UCLASS()
 class ANoteActor : public AActor
@@ -43,14 +48,54 @@ public:
 	// true の間は判定が出るまで消えない（判定役に登録されたら true になる）
 	void SetWaitForJudge(bool bWait) { bWaitForJudge = bWait; }
 
-	// 判定が確定したときに判定役から呼ばれる。ミス以外は叩かれたのでその場で消える
+	// 判定が確定したときに判定役から呼ばれる。判定が確定したらその場で消える（Miss も含む）
 	virtual void OnJudged(ERhythmJudgement Judgement, ENoteJudgePoint Point);
+
+	// 判定対象から外す（ゲームオーバー時など）。そのまま飛んでいって消える
+	virtual void Abandon() { bWaitForJudge = false; }
+
+	// プレートの輪郭（Actor 基準の座標、傾きも反映済み）。判定位置の目安表示に使う
+	void GetPlateOutline(TArray<FVector>& OutPoints) const;
 
 protected:
 
-	// 見た目（球)
+	virtual void BeginPlay() override;
+
+	// プレートの傾きをかけるための親（Plate と Mesh はこの下に付く）
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Note")
+	TObjectPtr<USceneComponent> HeadPivot;
+
+	// 仮の形（横長の六角形プレート）。Mesh にモデルが無いときに使う
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Note")
+	TObjectPtr<UProceduralMeshComponent> Plate;
+
+	// デザイナーのモデル用。Static Mesh を設定すると Plate の代わりにこちらを表示する
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Note")
 	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	// 仮の形に使うマテリアル。"Color" という Vector パラメータがあればレーンの色が入る
+	UPROPERTY(EditDefaultsOnly, Category="Note|Shape")
+	TObjectPtr<UMaterialInterface> NoteMaterial;
+
+	// プレートの横幅（レーンの並びの方向、cm）
+	UPROPERTY(EditDefaultsOnly, Category="Note|Shape", meta=(ClampMin=1.0, Units="cm"))
+	float PlateWidth = 120.0f;
+
+	// プレートの奥行き（飛んでくる方向、cm）
+	UPROPERTY(EditDefaultsOnly, Category="Note|Shape", meta=(ClampMin=1.0, Units="cm"))
+	float PlateDepth = 35.0f;
+
+	// 左右のとがった部分の長さ（cm）
+	UPROPERTY(EditDefaultsOnly, Category="Note|Shape", meta=(ClampMin=0.0, Units="cm"))
+	float PlatePointLength = 22.0f;
+
+	// プレートの厚み（cm）
+	UPROPERTY(EditDefaultsOnly, Category="Note|Shape", meta=(ClampMin=0.1, Units="cm"))
+	float PlateThickness = 6.0f;
+
+	// プレートの傾き（度）。0 = 道路に寝かせる、90 = カメラ側へ立てる
+	UPROPERTY(EditDefaultsOnly, Category="Note|Shape", meta=(ClampMin=-90.0, ClampMax=90.0, Units="deg"))
+	float PlateTilt = 0.0f;
 
 	// 判定地点を通り過ぎてから消えるまでの割合（1.0 = 判定地点、1.3 = 少し通り過ぎた所）
 	UPROPERTY(EditAnywhere, Category="Note", meta=(ClampMin=1.0))
@@ -64,6 +109,12 @@ protected:
 
 	// 経過時間の割合 T（0〜）から位置を計算する
 	FVector CalcPosition(float T) const;
+
+	// 見た目の準備：傾きをかけ、モデルがあればモデル、無ければ仮のプレートを表示する
+	void SetupVisual(USceneComponent* Pivot, UProceduralMeshComponent* InPlate, UStaticMeshComponent* InMesh) const;
+
+	// 見た目のコンポーネントに色を塗る（表示中のほうだけ）
+	static void SetMeshColor(UMeshComponent* Target, const FLinearColor& Color);
 
 	float TravelTime = 1.0f;
 

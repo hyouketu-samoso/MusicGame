@@ -1,5 +1,7 @@
-﻿// 判定役のActor。レーンのキー入力を受け取り、飛んでいるノーツとのタイミングのズレから判定を決める。
-// コンボ数・判定ごとの回数もここで管理する。
+﻿// 判定役のActor。レーンの入力を受け取り、飛んでいるノーツとのタイミングのズレから判定を決める。
+// レーンは4本（0=左外側 / 1=左内側 / 2=右内側 / 3=右外側）。
+// プレイヤーコントローラーに入力コンポーネント（URhythmInputComponent）があれば、押下はそちらから受け取る。
+// スコア・コンボ・体力は ScoreComponent（URhythmScoreComponent）で管理する。
 // ホールドノーツは「始点を押したとき」と「終点で離したとき」の2回判定する。
 
 #pragma once
@@ -8,10 +10,12 @@
 #include "GameFramework/Actor.h"
 #include "InputCoreTypes.h"
 #include "RhythmTypes.h"
+#include "Input/RhythmInputTypes.h"
 #include "RhythmJudge.generated.h"
 
 class ANoteActor;
 class AHoldNoteActor;
+class URhythmScoreComponent;
 
 // 判定が出たときの通知（UIや演出はこれに登録する）
 // TimingError : 判定ラインに届く時刻とのズレ（秒）。マイナス = 早い、プラス = 遅い。ミスのときは 0
@@ -40,18 +44,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Rhythm Judge")
 	void ReleaseLane(int32 LaneIndex);
 
-	// 判定・コンボをリセットする
+	// スコア・コンボ・体力をリセットする
 	UFUNCTION(BlueprintCallable, Category="Rhythm Judge")
 	void ResetResult();
 
+	// スコア・コンボ・体力（UIやリザルトはここから読む）
 	UFUNCTION(BlueprintPure, Category="Rhythm Judge")
-	int32 GetCombo() const { return Combo; }
+	URhythmScoreComponent* GetScoreComponent() const { return ScoreComponent; }
 
 	UFUNCTION(BlueprintPure, Category="Rhythm Judge")
-	int32 GetMaxCombo() const { return MaxCombo; }
+	int32 GetCombo() const;
+
+	UFUNCTION(BlueprintPure, Category="Rhythm Judge")
+	int32 GetMaxCombo() const;
 
 	UFUNCTION(BlueprintPure, Category="Rhythm Judge")
 	int32 GetJudgementCount(ERhythmJudgement Judgement) const;
+
+	UFUNCTION(BlueprintPure, Category="Rhythm Judge")
+	bool IsGameOver() const;
 
 	// 判定が出るたびに呼ばれる
 	UPROPERTY(BlueprintAssignable, Category="Rhythm Judge")
@@ -61,7 +72,12 @@ protected:
 
 	virtual void BeginPlay() override;
 
-	// レーンごとの入力キー（要素番号 = レーン番号）
+	// スコア・コンボ・体力の管理
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Rhythm Judge")
+	TObjectPtr<URhythmScoreComponent> ScoreComponent;
+
+	// レーンごとのキー（要素番号 = レーン番号）。入力コンポーネント（URhythmInputComponent）と同じ D / F / J / K。
+	// 入力コンポーネントがあるときは、ここではホールドの「離した」だけを受け取る（押下は入力コンポーネントから）
 	UPROPERTY(EditAnywhere, Category="Rhythm Judge|Input")
 	TArray<FKey> LaneKeys;
 
@@ -89,8 +105,19 @@ private:
 	// ズレ（秒の絶対値）から判定を求める。どの幅にも入らなければ Miss
 	ERhythmJudgement CalcJudgement(float AbsError) const;
 
-	// 判定を確定させてコンボを更新し、通知する
+	// 判定を確定させてスコア・コンボ・体力を更新し、通知する
 	void ApplyJudgement(ANoteActor* Note, ERhythmJudgement Judgement, float TimingError, ENoteJudgePoint Point);
+
+	// 体力が 0 になったとき。残りのノーツを判定対象から外し、入力を受け付けなくする
+	UFUNCTION()
+	void HandleGameOver();
+
+	// 入力コンポーネントからのレーン入力（キーボード D/F/J/K・スティック弾き）
+	UFUNCTION()
+	void HandleLaneInput(const FLaneInput& Input);
+
+	// スコア・体力をデバッグ表示する
+	void ShowDebugStatus() const;
 
 	// 始点の判定待ちのノーツ（通常・ホールド両方）
 	UPROPERTY()
@@ -99,14 +126,4 @@ private:
 	// 押し続けている最中のホールド（キー = レーン番号）
 	UPROPERTY()
 	TMap<int32, TObjectPtr<AHoldNoteActor>> HoldingNotes;
-
-	UPROPERTY(VisibleInstanceOnly, Category="Rhythm Judge|Result")
-	int32 Combo = 0;
-
-	UPROPERTY(VisibleInstanceOnly, Category="Rhythm Judge|Result")
-	int32 MaxCombo = 0;
-
-	// 判定ごとの回数（ERhythmJudgement の順）。ホールドは始点と終点で2回数える
-	UPROPERTY(VisibleInstanceOnly, Category="Rhythm Judge|Result")
-	TArray<int32> JudgementCounts;
 };
