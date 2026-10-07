@@ -1,4 +1,5 @@
 #pragma once
+//‚²‚Ø‚ñ‚È‚³‚¢
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -30,7 +31,7 @@ public:
 	// •ˆ–Ê’â~
 	UFUNCTION(BlueprintCallable, Category = "Note Manager")
 	void StopChart();
-
+	
 	// ƒm[ƒc¶¬ˆ—
 	void UpdateSpawn(
 		float CurrentSongTime
