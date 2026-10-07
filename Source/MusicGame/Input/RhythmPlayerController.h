@@ -17,19 +17,19 @@ UCLASS()
 class MUSICGAME_API ARhythmPlayerController : public APlayerController
 {
 	GENERATED_BODY()
-	
+
 public:
 	ARhythmPlayerController();
 
-	UPROPERTY(VisibleAnywhere,BlueprintReadOnly)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	TObjectPtr<URhythmInputComponent>RhythmInput;
 
 	// ポーズ画面のWidget(BPで WBP_PauseMenu を指定する)
-	UPROPERTY(EditAnyWhere, BluePrintReadOnly,Category = "Rhythm|Pause")
+	UPROPERTY(EditAnyWhere, BluePrintReadOnly, Category = "Rhythm|Pause")
 	TSubclassOf<UUserWidget>PauseWidgetClass;
 
 	//　ポーズの開閉を切り替える
-	UFUNCTION(BluePrintCallable,Category = "Rhythm|Pause")
+	UFUNCTION(BluePrintCallable, Category = "Rhythm|Pause")
 	void TogglePause();
 
 	// ポーズを解除する(再開ボタンにも使用可)
@@ -39,6 +39,10 @@ public:
 	// ゲームを終了する(強制終了ボタン)
 	UFUNCTION(BluePrintCallable, Category = "Rhythm|Pause")
 	void QuitToWindows();
+
+	// ゲーム画面のWidget(BPでWBP_GameMainを指定する)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<UUserWidget>MainWidgetClass;
 
 protected:
 	virtual void BeginPlay() override;
@@ -51,6 +55,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UUserWidget>PauseWidget;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget>MainWidget;
 
 	bool bIsPaused = false;
 };

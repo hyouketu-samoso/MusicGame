@@ -6,7 +6,7 @@
 
 ARhythmPlayerController::ARhythmPlayerController()
 {
-	RhythmInput = 
+	RhythmInput =
 		CreateDefaultSubobject<URhythmInputComponent>(TEXT("RhythmInput"));
 }
 
@@ -19,6 +19,16 @@ void ARhythmPlayerController::BeginPlay()
 	{
 		RhythmInput->OnPauseInput.AddDynamic(this, &ARhythmPlayerController::HandlePauseInput);
 	}
+
+	// ゲーム画面のWidgetを表示する
+	if (IsLocalPlayerController() && MainWidgetClass)
+	{
+		MainWidget = CreateWidget<UUserWidget>(this, MainWidgetClass);
+		if (MainWidget)
+		{
+			MainWidget->AddToViewport();
+		}
+	}
 }
 
 void ARhythmPlayerController::HandlePauseInput()
@@ -28,7 +38,7 @@ void ARhythmPlayerController::HandlePauseInput()
 
 void ARhythmPlayerController::TogglePause()
 {
-	if (bIsPaused){
+	if (bIsPaused) {
 		ResumeGame();
 	}
 	else {
@@ -39,7 +49,7 @@ void ARhythmPlayerController::TogglePause()
 void ARhythmPlayerController::OpenPause()
 {
 	if (bIsPaused) return;
-	
+
 	// Widgetがまだ無ければ作る
 	if (!PauseWidget && PauseWidgetClass)
 	{
@@ -69,7 +79,7 @@ void ARhythmPlayerController::ResumeGame()
 {
 	if (!bIsPaused)return;
 
-	if (PauseWidget){
+	if (PauseWidget) {
 		PauseWidget->RemoveFromParent();
 	}
 
