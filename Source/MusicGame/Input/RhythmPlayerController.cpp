@@ -3,6 +3,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "BackVideoActor.h"
 
 ARhythmPlayerController::ARhythmPlayerController()
 {
@@ -28,6 +29,11 @@ void ARhythmPlayerController::BeginPlay()
 		{
 			MainWidget->AddToViewport();
 		}
+	}
+
+	if (IsLocalPlayerController() && BackVideoClass)
+	{
+		BackVideo = GetWorld()->SpawnActor<ABackVideoActor>(BackVideoClass, BackVideoTransform);
 	}
 }
 

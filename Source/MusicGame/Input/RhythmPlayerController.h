@@ -12,6 +12,7 @@
 
 class URhythmInputComponent;
 class UUserWidget;
+class ABackVideoActor;
 
 UCLASS()
 class MUSICGAME_API ARhythmPlayerController : public APlayerController
@@ -43,6 +44,15 @@ public:
 	// ゲーム画面のWidget(BPでWBP_GameMainを指定する)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<UUserWidget>MainWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Video")
+	TSubclassOf<ABackVideoActor> BackVideoClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Video")
+	FTransform BackVideoTransform;
+
+	UPROPERTY()
+	TObjectPtr<ABackVideoActor> BackVideo;
 
 protected:
 	virtual void BeginPlay() override;
