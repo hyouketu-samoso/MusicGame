@@ -13,6 +13,7 @@
 class URhythmInputComponent;
 class UUserWidget;
 class ABackVideoActor;
+class USongSelectWidget;
 
 UCLASS()
 class MUSICGAME_API ARhythmPlayerController : public APlayerController
@@ -70,4 +71,15 @@ private:
 	TObjectPtr<UUserWidget>MainWidget;
 
 	bool bIsPaused = false;
+
+public:
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<USongSelectWidget> SongSelectWidgetClass;
+
+private:
+	UPROPERTY()
+	TObjectPtr<USongSelectWidget> SongSelectWidget;
+
+	UFUNCTION()
+	void HandleSongSelectClosed();
 };
