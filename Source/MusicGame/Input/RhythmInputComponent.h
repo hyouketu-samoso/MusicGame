@@ -66,9 +66,55 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Rhythm|Hold")
 	FOnLaneHold OnLaneHoldEnd;
 
+	UPROPERTY(EditAnywhere, Category = "Rhythm|Stick", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float FireThreshold = 0.70f;	// 入力成立値(これ以上倒れたら発火)
+
+	UPROPERTY(EditAnywhere, Category = "Rhythm|Stick", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float ReleaseThreshold = 0.20f;	// デットゾーン(これ以下に戻ったら再受付)
+
+
+public:
+	// デッドゾーン(0.10〜0.35、0.05刻み)
+	UFUNCTION(BlueprintCallable, Category = "Rhythm|Stick")
+	void SetDeadZone(float NewDeadZone);
+
+	// 感度(1〜5)→入力成立値に変換
+	UFUNCTION(BlueprintCallable, Category = "Rhythm|Stick")
+	void SetSensitivity(int32 Level);
+
+	UFUNCTION(BlueprintPure, Category = "Rhythm|Stick")
+	float GetDeadZone() const { return ReleaseThreshold; }
+
+	UFUNCTION(BlueprintPure, Category = "Rhythm|Stick")
+	int32 GetSensitivity() const { return SensitivityLevel; }
+
+	// UIの◀▶ボタン用(Delta = -1 / +1)。変更後に自動保存
+	UFUNCTION(BlueprintCallable, Category = "Rhythm|Stick")
+	void ChangeDeadZoneStep(int32 Delta);
+
+	UFUNCTION(BlueprintCallable, Category = "Rhythm|Stick")
+	void ChangeSensitivityStep(int32 Delta);
+
+	// 振動
+	UFUNCTION(BlueprintCallable, Category = "Rhythm|Vibration")
+	void SetVibrationEnabled(bool bEnable);
+
+	UFUNCTION(BlueprintCallable, Category = "Rhythm|Vibration")
+	void ToggleVibration();
+
+	UFUNCTION(BlueprintPure, Category = "Rhythm|Vibration")
+	bool IsVibrationEnabled() const { return bVibrationEnabled; }
+
+	void SaveInputSettings();
+	void LoadInputSettings();
+
+private:
+	int32 SensitivityLevel = 3;
+
 protected:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 		FActorComponentTickFunction* ThisTickFunction)override;
+	virtual void BeginPlay() override;
 
 private:
 	void UpdateStick(float x, FStickState& State, int32 LeftLane, int32 RightLane, double Now);
@@ -85,9 +131,9 @@ private:
 
 	bool bPauseHeld = false;		// ポーズキーの押しっぱなし防止
 
+	bool bVibrationEnabled = true;
+
 	// 調整用の値(後でDataAssetに移す)
-	float FireThreshold = 0.65f;	// これ以上倒れたら発火
-	float ReleaseThreshold = 0.3f;	// これ以下に戻ったら再受付
 	float ReverseLockSec = 0.06f;	// 発火後、逆方向を無効にする秒数
 
 	// デバッグ表示

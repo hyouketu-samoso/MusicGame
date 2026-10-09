@@ -41,8 +41,18 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent,Category = "Menu")
 	void OnMenuButtonFocused(UButton* FocusedButton);
 
+	// ON状態のButtonの色(フォーカスされていない時)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Menu")
+	FLinearColor ToggledOnColor = FLinearColor(0.2f, 0.6f, 1.0f, 1.0f);
+
+public:
+	// 指定したButtonを「ON状態の色」にするか切り替える(WBPから呼ぶ)
+	UFUNCTION(BlueprintCallable, Category = "Menu")
+	void SetButtonToggledOn(UButton* Button, bool bOn);
+
 private:
 	UPROPERTY()
 	TArray<TObjectPtr<UButton>> MenuButtons;
 	TWeakObjectPtr<UButton> LastFocusedButton;
+	TSet<TWeakObjectPtr<UButton>> ToggledOnButtons;
 };

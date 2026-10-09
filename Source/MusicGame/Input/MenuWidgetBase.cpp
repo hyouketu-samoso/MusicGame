@@ -51,7 +51,18 @@ void UMenuWidgetBase::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 		if (!Button) continue;
 
 		const bool bFocused = Button->HasKeyboardFocus();
-		Button->SetBackgroundColor(bFocused ? SelectedColor : NormalColor);
+
+		FLinearColor Color = NormalColor;
+		if (bFocused)
+		{
+			Color = SelectedColor;
+		}
+		else if (ToggledOnButtons.Contains(TWeakObjectPtr<UButton>(Button)))
+		{
+			Color = ToggledOnColor;
+		}
+		Button->SetBackgroundColor(Color);
+		
 
 		// フォーカスが新しく移ったら、ブループリントへ通知する
 		if (bFocused && LastFocusedButton.Get() != Button)
@@ -80,4 +91,18 @@ FReply UMenuWidgetBase::NativeOnPreviewKeyDown(const FGeometry& InGeometry,
 	}
 
 	return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
+}
+
+void UMenuWidgetBase::SetButtonToggledOn(UButton* Button, bool bOn)
+{
+	if (!Button) return;
+
+	if (bOn)
+	{
+		ToggledOnButtons.Add(Button);
+	}
+	else
+	{
+		ToggledOnButtons.Remove(Button);
+	}
 }

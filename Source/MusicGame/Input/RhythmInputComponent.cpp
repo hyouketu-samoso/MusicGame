@@ -1,4 +1,6 @@
 ﻿#include "RhythmInputComponent.h"
+#include "Kismet/GamePlayStatics.h"
+#include "RhythmSettingsSaveGame.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
@@ -29,7 +31,6 @@ void URhythmInputComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	// ポーズ中はレーン入力を出さない(押されていたレーンは離した扱いにする)
 	if (GetWorld()->IsPaused())
 	{
-		ReleaseAllLanes();
 		return;
 	}
 
@@ -68,6 +69,9 @@ void URhythmInputComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 			FString::Printf(TEXT("Lane=%d t=%.3f count=%d hold=%d%d%d%d"),
 				LastLane, LastLaneTime, FireCount,
 				bLaneHeld[0], bLaneHeld[1], bLaneHeld[2], bLaneHeld[3]));
+
+		GEngine->AddOnScreenDebugMessage(101, 0.f, FColor::Yellow,
+			FString::Printf(TEXT("LX=%.3f RX=%.3f"), LX, RX));
 	}
 }
 
@@ -218,4 +222,85 @@ void URhythmInputComponent::UpdateHold(double Now)
 
 		OnLaneHoldStart.Broadcast(In);
 	}
+}
+
+void URhythmInputComponent::SetDeadZone(float NewDeadZone)
+{
+	// 0.05刻みに丸めて、仕様書の範囲(0.10〜0.35)に収める
+	const float Snapped = FMath::RoundToFloat(NewDeadZone / 0.05f) * 0.05f;
+	float DZ = FMath::Clamp(Snapped, 0.10f, 0.35f);
+
+	// 整合条件:デッドゾーン < 入力成立値
+	DZ = FMath::Min(DZ, FireThreshold - 0.05f);
+
+	ReleaseThreshold = DZ;
+}
+
+void URhythmInputComponent::SetSensitivity(int32 Level)
+{
+	// 感度1〜5 → 入力成立値(高感度ほど小さい)
+	static const float FireByLevel[5] = { 0.80f, 0.75f, 0.70f, 0.65f, 0.60f };
+
+	SensitivityLevel = FMath::Clamp(Level, 1, 5);
+	FireThreshold = FireByLevel[SensitivityLevel - 1];
+
+	// 成立値が変わったので、デッドゾーンも整合条件を再確認
+	ReleaseThreshold = FMath::Min(ReleaseThreshold, FireThreshold - 0.05f);
+}
+
+static const TCHAR* GInputSettingsSlot = TEXT("RhythmInputSettings");
+
+void URhythmInputComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	LoadInputSettings();	// 保存済みの設定を反映
+}
+
+void URhythmInputComponent::ChangeDeadZoneStep(int32 Delta)
+{
+	SetDeadZone(ReleaseThreshold + 0.05f * Delta);
+	SaveInputSettings();
+}
+
+void URhythmInputComponent::ChangeSensitivityStep(int32 Delta)
+{
+	SetSensitivity(SensitivityLevel + Delta);
+	SaveInputSettings();
+}
+
+void URhythmInputComponent::SetVibrationEnabled(bool bEnable)
+{
+	bVibrationEnabled = bEnable;
+	SaveInputSettings();
+}
+
+void URhythmInputComponent::ToggleVibration()
+{
+	SetVibrationEnabled(!bVibrationEnabled);
+}
+
+void URhythmInputComponent::SaveInputSettings()
+{
+	URhythmSettingsSaveGame* Save = Cast<URhythmSettingsSaveGame>(
+		UGameplayStatics::CreateSaveGameObject(URhythmSettingsSaveGame::StaticClass()));
+	if (!Save) return;
+
+	Save->DeadZone = ReleaseThreshold;
+	Save->SensitivityLevel = SensitivityLevel;
+	Save->bVibration = bVibrationEnabled;
+	UGameplayStatics::SaveGameToSlot(Save, GInputSettingsSlot, 0);
+}
+
+void URhythmInputComponent::LoadInputSettings()
+{
+	if (!UGameplayStatics::DoesSaveGameExist(GInputSettingsSlot, 0)) return;
+
+	URhythmSettingsSaveGame* Load = Cast<URhythmSettingsSaveGame>(
+		UGameplayStatics::LoadGameFromSlot(GInputSettingsSlot, 0));
+	if (!Load) return;
+
+	// 感度を先に入れる(デッドゾーンは入力成立値より小さくする必要があるため)
+	SetSensitivity(Load->SensitivityLevel);
+	SetDeadZone(Load->DeadZone);
+	bVibrationEnabled = Load->bVibration;
 }
