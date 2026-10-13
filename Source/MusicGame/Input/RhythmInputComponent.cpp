@@ -5,6 +5,8 @@
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "InputCoreTypes.h"
+#include "Sound/SoundMix.h"
+#include "Sound/SoundClass.h"
 
 URhythmInputComponent::URhythmInputComponent()
 {
@@ -254,6 +256,7 @@ void URhythmInputComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	LoadInputSettings();	// 保存済みの設定を反映
+	ApplyVolumes();			// 保存済みの音量を反映
 }
 
 void URhythmInputComponent::ChangeDeadZoneStep(int32 Delta)
@@ -288,7 +291,13 @@ void URhythmInputComponent::SaveInputSettings()
 	Save->DeadZone = ReleaseThreshold;
 	Save->SensitivityLevel = SensitivityLevel;
 	Save->bVibration = bVibrationEnabled;
+	Save->BGMVolumeLevel = BGMVolumeLevel;
+	Save->SEVolumeLevel = SEVolumeLevel;
+	Save->MasterVolumeLevel = MasterVolumeLevel;
+
 	UGameplayStatics::SaveGameToSlot(Save, GInputSettingsSlot, 0);
+
+	UE_LOG(LogTemp, Warning, TEXT("Save: M=%d B=%d S=%d"), MasterVolumeLevel, BGMVolumeLevel, SEVolumeLevel);
 }
 
 void URhythmInputComponent::LoadInputSettings()
@@ -303,4 +312,84 @@ void URhythmInputComponent::LoadInputSettings()
 	SetSensitivity(Load->SensitivityLevel);
 	SetDeadZone(Load->DeadZone);
 	bVibrationEnabled = Load->bVibration;
+	BGMVolumeLevel = FMath::Clamp(Load->BGMVolumeLevel, 0, 100);
+	SEVolumeLevel = FMath::Clamp(Load->SEVolumeLevel, 0, 100);
+	MasterVolumeLevel = FMath::Clamp(Load->MasterVolumeLevel, 0, 100);
+
+	UE_LOG(LogTemp, Warning, TEXT("Load: M=%d B=%d S=%d"), MasterVolumeLevel, BGMVolumeLevel, SEVolumeLevel);
+}
+
+void URhythmInputComponent::ChangeMasterVolumeStep(int32 Delta)
+{
+	MasterVolumeLevel = FMath::Clamp(MasterVolumeLevel + Delta, 0, 100);
+	ApplyVolumes();
+	SaveInputSettings();
+}
+
+void URhythmInputComponent::ChangeBGMVolumeStep(int32 Delta)
+{
+	BGMVolumeLevel = FMath::Clamp(BGMVolumeLevel + Delta, 0, 100);
+	ApplyVolumes();
+	SaveInputSettings();
+}
+
+void URhythmInputComponent::ChangeSEVolumeStep(int32 Delta)
+{
+	SEVolumeLevel = FMath::Clamp(SEVolumeLevel + Delta, 0, 100);
+	ApplyVolumes();
+	SaveInputSettings();
+}
+
+void URhythmInputComponent::ApplyVolumes()
+{
+	if (!SoundMix || !BGMClass || !SEClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("RhythmInput: SoundMix / BGMClass / SEClass が未設定です(BP_RhythmPlayerController で指定)"));
+		return;
+	}
+
+	const float Master = MasterVolumeLevel / 10.0f;
+
+	UGameplayStatics::SetBaseSoundMix(this, SoundMix);
+	UGameplayStatics::SetSoundMixClassOverride(this, SoundMix, BGMClass, Master * (BGMVolumeLevel / 10.0f), 1.0f, 0.0f, true);
+	UGameplayStatics::SetSoundMixClassOverride(this, SoundMix, SEClass, Master * (SEVolumeLevel / 10.0f), 1.0f, 0.0f, true);
+}
+
+void URhythmInputComponent::SetMasterVolumeLevel(int32 Level)
+{
+	
+	MasterVolumeLevel = FMath::Clamp(Level, 0, 100);
+	bVolumeDirty = true;
+	ApplyVolumes();
+}
+
+void URhythmInputComponent::SetBGMVolumeLevel(int32 Level)
+{
+	BGMVolumeLevel = FMath::Clamp(Level, 0, 100);
+	bVolumeDirty = true;
+	ApplyVolumes();
+}
+
+void URhythmInputComponent::SetSEVolumeLevel(int32 Level)
+{
+	SEVolumeLevel = FMath::Clamp(Level, 0, 100);
+	bVolumeDirty = true;
+	ApplyVolumes();
+}
+
+void URhythmInputComponent::SaveVolumeSettings()
+{
+	bVolumeDirty = false;
+	SaveInputSettings();
+}
+
+void URhythmInputComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// スライダーで変えた音量が未保存なら、終了時に保存する
+	if (bVolumeDirty)
+	{
+		SaveVolumeSettings();
+	}
+
+	Super::EndPlay(EndPlayReason);
 }
