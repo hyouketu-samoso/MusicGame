@@ -24,7 +24,8 @@ public class MusicGame : ModuleRules
             "SlateCore",
 			"Niagara",
 			"MediaAssets",
-			"ProceduralMeshComponent"
+			"ProceduralMeshComponent",
+			"DeveloperSettings"
         });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
@@ -43,8 +44,9 @@ public class MusicGame : ModuleRules
 			"MusicGame/Variant_SideScrolling/AI",
 			"MusicGame/Variant_SideScrolling/Gameplay",
 			"MusicGame/Variant_SideScrolling/Interfaces",
-			"MusicGame/Variant_SideScrolling/UI",
-			"MusicGame/Rhythm"
+			"MusicGame/Variant_SideScrolling/UI"
+			// ※ "MusicGame/Rhythm" は登録しない。RhythmResultWidget.h など「Rhythm」で始まるファイル名と
+			//    UnrealHeaderTool が取り違えてビルドエラーになるため。Rhythm フォルダの外からは "Rhythm/xxx.h" と書く
 		});
 
 		// Uncomment if you are using Slate UI

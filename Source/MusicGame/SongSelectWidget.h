@@ -1,11 +1,12 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 // ============================================================
 // SongSelectWidget
-//  –ğŠ„ : ƒQ[ƒ€ŠJn‘O‚Ì‹È‘I‘ğUI‚Ìœ‘g‚İ
-//         (‹È‚ÌØ‘Ö / “ïˆÕ“x / ‘¬“x / ƒ^ƒCƒ~ƒ“ƒO’²® / ƒQ[ƒ€ƒXƒ^[ƒg)
-//  •ûj : ‚±‚±‚Å‚Íu‰Ÿ‚³‚ê‚½v‚±‚Æ‚ğ’Ê’m‚·‚é‚¾‚¯‚ÅA
-//         ‘¬“x‚È‚Ç‚ÌÀÛ‚Ìˆ—‚ÍA’S“–Ò‚ªƒfƒŠƒQ[ƒg‚ÉŒq‚¢‚Ås‚¤
-//  ‰‰o : ƒQ[ƒ€ƒXƒ^[ƒg‚ÅAƒtƒF[ƒhƒAƒEƒg(+­‚µŠg‘å)‚µ‚Ä‚©‚ç©•ª‚ğÁ‚·
+//  å½¹å‰² : ã‚²ãƒ¼ãƒ é–‹å§‹å‰ã®æ›²é¸æŠUIã®éª¨çµ„ã¿
+//         (æ›²ã®åˆ‡æ›¿ / é›£æ˜“åº¦ / é€Ÿåº¦ / ã‚¿ã‚¤ãƒŸãƒ³ã‚°èª¿æ•´ / ã‚²ãƒ¼ãƒ ã‚¹ã‚¿ãƒ¼ãƒˆ)
+//  æ–¹é‡ : ã€ŒæŠ¼ã•ã‚ŒãŸã€ã“ã¨ã‚’é€šçŸ¥ã™ã‚‹ã€‚
+//         é›£æ˜“åº¦ãƒ»é€Ÿåº¦ã¯è¨­å®šç½®ãå ´ï¼ˆURhythmSettingsSubsystemï¼‰ã«ã‚‚ä¿å­˜ã—ã€
+//         ãƒ—ãƒ¬ã‚¤ç”»é¢ã®è­œé¢é¸ã³ãƒ»ãƒãƒ¼ãƒ„é€Ÿåº¦ã«ä½¿ã‚ã‚Œã‚‹ï¼ˆé›£æ˜“åº¦èª¿æ•´ä»•æ§˜æ›¸ï¼‰
+//  æ¼”å‡º : ã‚²ãƒ¼ãƒ ã‚¹ã‚¿ãƒ¼ãƒˆã§ã€ãƒ•ã‚§ãƒ¼ãƒ‰ã‚¢ã‚¦ãƒˆ(+å°‘ã—æ‹¡å¤§)ã—ã¦ã‹ã‚‰è‡ªåˆ†ã‚’æ¶ˆã™
 // ============================================================
 #pragma once
 
@@ -23,12 +24,12 @@ enum class ESongDifficulty : uint8
 	Hard
 };
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSongChangeRequested, int32, Direction);       // -1=‘O‚Ì‹È / +1=Ÿ‚Ì‹È
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSongChangeRequested, int32, Direction);       // -1=å‰ã®æ›² / +1=æ¬¡ã®æ›²
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDifficultySelected, ESongDifficulty, Difficulty);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSpeedSelected, int32, Speed);                  // 1?5
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTimingAdjustRequested);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameStartRequested);   // ƒQ[ƒ€ƒXƒ^[ƒg‚ª‰Ÿ‚³‚ê‚½uŠÔ
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSongSelectClosed);     // ƒtƒF[ƒh‚ªI‚í‚Á‚ÄAƒEƒBƒWƒFƒbƒg‚ªÁ‚¦‚½Œã
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameStartRequested);   // ã‚²ãƒ¼ãƒ ã‚¹ã‚¿ãƒ¼ãƒˆãŒæŠ¼ã•ã‚ŒãŸç¬é–“
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSongSelectClosed);     // ãƒ•ã‚§ãƒ¼ãƒ‰ãŒçµ‚ã‚ã£ã¦ã€ã‚¦ã‚£ã‚¸ã‚§ãƒƒãƒˆãŒæ¶ˆãˆãŸå¾Œ
 
 UCLASS()
 class MUSICGAME_API USongSelectWidget : public UUserWidget
@@ -36,7 +37,7 @@ class MUSICGAME_API USongSelectWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	// ---- ’Ê’m(ˆ—‚Ì’S“–Ò‚Í‚±‚±‚ÉŒq‚®) ----
+	// ---- é€šçŸ¥(å‡¦ç†ã®æ‹…å½“è€…ã¯ã“ã“ã«ç¹‹ã) ----
 	UPROPERTY(BlueprintAssignable, Category = "SongSelect")
 	FOnSongChangeRequested OnSongChangeRequested;
 
@@ -55,19 +56,19 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "SongSelect")
 	FOnSongSelectClosed OnClosed;
 
-	// ---- •\¦‚ÌXV(ˆ—‚Ì’S“–Ò‚©‚çŒÄ‚Ô) ----
-	// ‹È–¼‚Æuƒm[ƒc” / •ª:•bv‚ğ•\¦‚·‚é
+	// ---- è¡¨ç¤ºã®æ›´æ–°(å‡¦ç†ã®æ‹…å½“è€…ã‹ã‚‰å‘¼ã¶) ----
+	// æ›²åã¨ã€Œãƒãƒ¼ãƒ„æ•° / åˆ†:ç§’ã€ã‚’è¡¨ç¤ºã™ã‚‹
 	UFUNCTION(BlueprintCallable, Category = "SongSelect")
 	void SetSongInfo(const FText& Title, int32 NoteCount, float LengthSeconds);
 
-	// ‘I‘ğ’†‚ÌŒ©‚½–Ú‚¾‚¯‚ğ•Ï‚¦‚é(’Ê’m‚Í”ò‚Î‚³‚È‚¢)
+	// é¸æŠä¸­ã®è¦‹ãŸç›®ã ã‘ã‚’å¤‰ãˆã‚‹(é€šçŸ¥ã¯é£›ã°ã•ãªã„)
 	UFUNCTION(BlueprintCallable, Category = "SongSelect")
 	void SetSelectedDifficulty(ESongDifficulty Difficulty);
 
 	UFUNCTION(BlueprintCallable, Category = "SongSelect")
 	void SetSelectedSpeed(int32 Speed);
 
-	// ƒtƒF[ƒhƒAƒEƒg‚µ‚ÄÁ‚·(ƒQ[ƒ€ƒXƒ^[ƒg‚©‚ç‚àŒÄ‚Î‚ê‚é)
+	// ãƒ•ã‚§ãƒ¼ãƒ‰ã‚¢ã‚¦ãƒˆã—ã¦æ¶ˆã™(ã‚²ãƒ¼ãƒ ã‚¹ã‚¿ãƒ¼ãƒˆã‹ã‚‰ã‚‚å‘¼ã°ã‚Œã‚‹)
 	UFUNCTION(BlueprintCallable, Category = "SongSelect")
 	void CloseWithFade();
 
@@ -75,21 +76,21 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
-	// ---- ‰‰o‚Ì’²®’l ----
+	// ---- æ¼”å‡ºã®èª¿æ•´å€¤ ----
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Fade")
-	float FadeDuration = 0.5f;          // Á‚¦‚é‚Ü‚Å‚Ì•b”
+	float FadeDuration = 0.5f;          // æ¶ˆãˆã‚‹ã¾ã§ã®ç§’æ•°
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Fade")
-	float ScaleUpAmount = 0.06f;        // Á‚¦‚é‚Æ‚«‚ÉA‚Ç‚ê‚¾‚¯Šg‘å‚·‚é‚©(0.06 = 6%)
+	float ScaleUpAmount = 0.06f;        // æ¶ˆãˆã‚‹ã¨ãã«ã€ã©ã‚Œã ã‘æ‹¡å¤§ã™ã‚‹ã‹(0.06 = 6%)
 
-	// ---- ‘I‘ğ’†‚ÌF ----
+	// ---- é¸æŠä¸­ã®è‰² ----
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Color")
 	FLinearColor SelectedColor = FLinearColor(1.0f, 0.8f, 0.2f, 1.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Color")
 	FLinearColor NormalColor = FLinearColor::White;
 
-	// ---- WBP‘¤‚ÉA“¯‚¶–¼‘O‚Ì•”•i‚ğ’u‚­(u•Ï”‚Å‚ ‚év‚Éƒ`ƒFƒbƒN) ----
+	// ---- WBPå´ã«ã€åŒã˜åå‰ã®éƒ¨å“ã‚’ç½®ã(ã€Œå¤‰æ•°ã§ã‚ã‚‹ã€ã«ãƒã‚§ãƒƒã‚¯) ----
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> SongTitleText;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> SongInfoText;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> SongPrevButton;
@@ -108,7 +109,7 @@ protected:
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> StartButton;
 
 private:
-	// ƒ{ƒ^ƒ“‚ÌƒNƒŠƒbƒN(AddDynamic ‚É‚Í UFUNCTION ‚ª•K—v)
+	// ãƒœã‚¿ãƒ³ã®ã‚¯ãƒªãƒƒã‚¯(AddDynamic ã«ã¯ UFUNCTION ãŒå¿…è¦)
 	UFUNCTION() void HandleSongPrev();
 	UFUNCTION() void HandleSongNext();
 	UFUNCTION() void HandleNormal();
@@ -122,6 +123,10 @@ private:
 	UFUNCTION() void HandleStart();
 
 	void SelectSpeed(int32 Speed);
+	void SelectDifficulty(ESongDifficulty Difficulty);
+
+	// é›£æ˜“åº¦ãƒ»é€Ÿåº¦ã‚’ä¿å­˜ã™ã‚‹è¨­å®šç½®ãå ´ï¼ˆURhythmSettingsSubsystemï¼‰
+	class URhythmSettingsSubsystem* GetRhythmSettings() const;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UButton>> SpeedButtons;

@@ -16,6 +16,14 @@ enum class ERhythmJudgement : uint8
 	Miss,
 };
 
+// 譜面の難易度（難易度で変わるのは譜面だけ。速度・判定幅・スコアなどは変えない）
+UENUM(BlueprintType)
+enum class ERhythmDifficulty : uint8
+{
+	Normal,
+	Hard,
+};
+
 // どのタイミングの判定か
 UENUM(BlueprintType)
 enum class ENoteJudgePoint : uint8

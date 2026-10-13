@@ -4,6 +4,9 @@
 #include "HoldNoteActor.h"
 #include "RhythmJudge.h"
 #include "ChartImporter.h"
+#include "RhythmSettingsSubsystem.h"
+#include "RhythmGameSettings.h"
+#include "Engine/GameInstance.h"
 
 #include "Camera/CameraComponent.h"
 #include "Components/ArrowComponent.h"
@@ -72,21 +75,8 @@ ANoteSpawner::ANoteSpawner()
 	{
 		Camera->SetupAttachment(RootComponent);
 
-		// 今まで使用していたカメラ設定
-		Camera->SetRelativeLocationAndRotation(
-			FVector(
-				-1800.0f,
-				0.0f,
-				1000.0f
-			),
-			FRotator(
-				-25.0f,
-				0.0f,
-				0.0f
-			)
-		);
-
-		Camera->SetFieldOfView(60.0f);
+		// 位置・向き・視野角は Camera の設定項目から決める
+		UpdateCameraTransform();
 
 		Camera->bAutoActivate = true;
 	}
@@ -113,6 +103,23 @@ ANoteSpawner::ANoteSpawner()
 		FLinearColor(0.1f, 0.3f, 1.0f),
 		FLinearColor(1.0f, 0.2f, 0.8f),
 		FLinearColor(1.0f, 0.85f, 0.1f)
+	};
+
+
+	// ========================================================
+	// 4 Lane Targets（V字）
+	//
+	// プレイ画面UI（WBP_GameMain）の判定バー4本に重なる位置。内側のレーンほど手前。
+	// カメラが初期値（距離 700・高さ 400・角度 -15°・視野角 90°）のときに合わせた値なので、
+	// カメラを変えたらこちらも合わせ直す
+	// ========================================================
+
+	LaneTargetOffsets =
+	{
+		FVector( -60.0f, -300.0f, 0.0f),
+		FVector(-205.0f,  -90.0f, 0.0f),
+		FVector(-205.0f,   90.0f, 0.0f),
+		FVector( -60.0f,  300.0f, 0.0f)
 	};
 }
 
@@ -339,21 +346,22 @@ void ANoteSpawner::UpdateCameraTransform()
 	}
 
 
+	// 判定ラインの中心（このActorの位置）から、後ろへ CameraDistance・上へ CameraHeight の位置
 	Camera->SetRelativeLocationAndRotation(
 		FVector(
-			-1800.0f,
+			-CameraDistance,
 			0.0f,
-			1000.0f
+			CameraHeight
 		),
 		FRotator(
-			-25.0f,
+			CameraPitch,
 			0.0f,
 			0.0f
 		)
 	);
 
 	Camera->SetFieldOfView(
-		60.0f
+		CameraFieldOfView
 	);
 }
 
@@ -386,6 +394,9 @@ void ANoteSpawner::ActivateAutoCamera()
 
 	Camera->SetActive(true);
 
+	// ポーンの所持やカメラの自動切り替えで視点が戻されないようにする
+	PC->bAutoManageActiveCameraTarget = false;
+
 	PC->SetViewTarget(this);
 
 
@@ -409,10 +420,28 @@ void ANoteSpawner::LoadChart()
 	}
 
 
+	// ========================================================
+	// 難易度に合わせて譜面を選ぶ（HARD の譜面が空なら NORMAL を使う）
+	// ========================================================
+
+	FString SelectedChartPath = ChartFilePath;
+
+	if (const UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (const URhythmSettingsSubsystem* Settings = GameInstance->GetSubsystem<URhythmSettingsSubsystem>())
+		{
+			if (Settings->GetDifficulty() == ERhythmDifficulty::Hard && !HardChartFilePath.IsEmpty())
+			{
+				SelectedChartPath = HardChartFilePath;
+			}
+		}
+	}
+
+
 	const FString FullPath =
 		FPaths::Combine(
 			FPaths::ProjectContentDir(),
-			ChartFilePath
+			SelectedChartPath
 		);
 
 
@@ -579,7 +608,7 @@ void ANoteSpawner::StartChart()
 	ChartStartWorldTime =
 		Now +
 		static_cast<double>(
-			TravelTime
+			GetEffectiveTravelTime()
 			);
 
 
@@ -614,7 +643,7 @@ void ANoteSpawner::StartChart()
 		TEXT(
 			"TravelTime = %.3f"
 		),
-		TravelTime
+		GetEffectiveTravelTime()
 	);
 
 
@@ -625,7 +654,7 @@ void ANoteSpawner::StartChart()
 			"First SpawnTime = %.3f"
 		),
 		ChartNotes.Num() > 0
-		? ChartNotes[0].Time - TravelTime
+		? ChartNotes[0].Time - GetEffectiveTravelTime()
 		: 0.0f
 	);
 }
@@ -670,7 +699,7 @@ void ANoteSpawner::UpdateChartSpawn(
 
 		const float SpawnTime =
 			NoteData.Time -
-			TravelTime;
+			GetEffectiveTravelTime();
 
 
 		// まだ生成時刻ではない
@@ -945,7 +974,7 @@ bool ANoteSpawner::IsLaneFree(
 		GetWorld()->GetTimeSeconds()
 		+
 		static_cast<double>(
-			TravelTime
+			GetEffectiveTravelTime()
 			);
 
 
@@ -1081,7 +1110,7 @@ void ANoteSpawner::SpawnNoteInternal(
 		StartPos,
 		GetLaneTarget(LaneIndex),
 		ArcHeight,
-		TravelTime,
+		GetEffectiveTravelTime(),
 		LaneColors[LaneIndex],
 		LaneIndex
 	);
@@ -1126,6 +1155,32 @@ void ANoteSpawner::SpawnNoteInternal(
 
 
 // ============================================================
+// Get Effective Travel Time
+// ============================================================
+
+float ANoteSpawner::GetEffectiveTravelTime() const
+{
+	// プレイヤーが選んだノーツ速度（1〜5）。テスト用の上書きがあればそちら
+	int32 SpeedLevel = GetDefault<URhythmGameSettings>()->DefaultSpeedLevel;
+
+	if (TestSpeedLevelOverride > 0)
+	{
+		SpeedLevel = TestSpeedLevelOverride;
+	}
+	else if (const UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (const URhythmSettingsSubsystem* Settings = GameInstance->GetSubsystem<URhythmSettingsSubsystem>())
+		{
+			SpeedLevel = Settings->GetNoteSpeedLevel();
+		}
+	}
+
+	// 速度ごとの到達時間（プロジェクト設定 → ゲーム → Rhythm Game）
+	return GetDefault<URhythmGameSettings>()->GetArrivalTime(SpeedLevel);
+}
+
+
+// ============================================================
 // Get Lane Target
 // ============================================================
 
@@ -1134,32 +1189,29 @@ FVector ANoteSpawner::GetLaneTarget(
 ) const
 {
 	// ========================================================
-	// 4レーンの判定位置
-	//
-	// 以前使っていたV字配置をそのまま使用
+	// レーンごとの判定位置が設定されていればそれを使う（初期値は UI に合わせた V字）
 	// ========================================================
 
-	static const FVector LaneOffsets[4] =
+	if (LaneTargetOffsets.Num() == LaneColors.Num() &&
+		LaneTargetOffsets.IsValidIndex(LaneIndex))
 	{
-		FVector(-60.0f, -300.0f, 0.0f),
-		FVector(-205.0f, -90.0f, 0.0f),
-		FVector(-205.0f, 90.0f, 0.0f),
-		FVector(-60.0f, 300.0f, 0.0f)
-	};
+		// スポナーの向きに合わせて回転
+		return GetActorLocation() +
+			GetActorQuat().RotateVector(
+				LaneTargetOffsets[LaneIndex]
+			);
+	}
 
 
-	const int32 SafeLane =
-		FMath::Clamp(
-			LaneIndex,
-			0,
-			3
-		);
+	// ========================================================
+	// 無ければ中央揃えで左右に並べる（レーン 0 が左端）
+	// ========================================================
 
+	const float Offset =
+		(LaneIndex - (LaneColors.Num() - 1) * 0.5f) * LaneSpacing;
 
-	// Actorのローカル座標をワールド座標へ変換
-	return GetActorTransform().TransformPosition(
-		LaneOffsets[SafeLane]
-	);
+	return GetActorLocation() +
+		GetActorRightVector() * Offset;
 }
 
 
@@ -1169,92 +1221,37 @@ FVector ANoteSpawner::GetLaneTarget(
 
 void ANoteSpawner::DrawJudgeLine() const
 {
-	const int32 LaneNum =
-		LaneColors.Num();
-
-
-	if (LaneNum <= 0)
+	const int32 LaneNum = LaneColors.Num();
+	if (LaneNum == 0)
 	{
 		return;
 	}
 
+	const UWorld* World = GetWorld();
 
-	const UWorld* World =
-		GetWorld();
-
-
-	if (!World)
+	// となりのレーンの判定位置どうしを線でつなぐ（横一列でも V 字でも同じ）
+	for (int32 Lane = 0; Lane + 1 < LaneNum; ++Lane)
 	{
-		return;
+		DrawDebugLine(World, GetLaneTarget(Lane), GetLaneTarget(Lane + 1), FColor::White, false, -1.0f, 0, 2.0f);
 	}
 
+	// 飛ばすノーツの形（クラスの初期値）から輪郭を取り、各レーンの判定位置に描く。
+	// ノーツがこの枠にぴったり重なった瞬間がパーフェクト
+	const ANoteActor* NoteDefaults = NoteClass ? NoteClass->GetDefaultObject<ANoteActor>() : GetDefault<ANoteActor>();
+	TArray<FVector> Outline;
+	NoteDefaults->GetPlateOutline(Outline);
 
-	// ========================================================
-	// 各レーンの判定位置
-	// ========================================================
-
-	for (
-		int32 Lane = 0;
-		Lane < LaneNum;
-		Lane++
-		)
+	const FQuat Rotation = GetActorQuat();
+	for (int32 Lane = 0; Lane < LaneNum; ++Lane)
 	{
-		const FVector Center =
-			GetLaneTarget(Lane);
-
-
-		const FColor Color =
-			LaneColors[Lane].ToFColor(true);
-
-
-		// 判定位置を見やすくする
-		DrawDebugSphere(
-			World,
-			Center,
-			35.0f,
-			16,
-			Color,
-			false,
-			-1.0f,
-			0,
-			3.0f
-		);
-
-
-		// レーン番号位置の小さな縦線
-		DrawDebugLine(
-			World,
-			Center - FVector(0.0f, 0.0f, 40.0f),
-			Center + FVector(0.0f, 0.0f, 40.0f),
-			Color,
-			false,
-			-1.0f,
-			0,
-			3.0f
-		);
-	}
-
-
-	// ========================================================
-	// V字のレーンライン
-	// ========================================================
-
-	for (
-		int32 Lane = 0;
-		Lane + 1 < LaneNum;
-		Lane++
-		)
-	{
-		DrawDebugLine(
-			World,
-			GetLaneTarget(Lane),
-			GetLaneTarget(Lane + 1),
-			FColor::White,
-			false,
-			-1.0f,
-			0,
-			2.0f
-		);
+		const FVector Center = GetLaneTarget(Lane);
+		const FColor Color = LaneColors[Lane].ToFColor(true);
+		for (int32 i = 0; i < Outline.Num(); ++i)
+		{
+			const FVector P0 = Center + Rotation.RotateVector(Outline[i]);
+			const FVector P1 = Center + Rotation.RotateVector(Outline[(i + 1) % Outline.Num()]);
+			DrawDebugLine(World, P0, P1, Color, false, -1.0f, 0, 3.0f);
+		}
 	}
 }
 

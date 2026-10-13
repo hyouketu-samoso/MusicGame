@@ -1,6 +1,6 @@
 #include "MusicGameMode.h"
 
-#include "NoteSpawner.h"
+#include "Rhythm/NoteSpawner.h"
 
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"

@@ -1,8 +1,30 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "SongSelectWidget.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Engine/GameInstance.h"
+#include "Rhythm/RhythmSettingsSubsystem.h"
+
+namespace
+{
+	// 画面の難易度 ⇔ 設定置き場の難易度
+	ERhythmDifficulty ToRhythmDifficulty(ESongDifficulty Difficulty)
+	{
+		return Difficulty == ESongDifficulty::Hard ? ERhythmDifficulty::Hard : ERhythmDifficulty::Normal;
+	}
+
+	ESongDifficulty ToSongDifficulty(ERhythmDifficulty Difficulty)
+	{
+		return Difficulty == ERhythmDifficulty::Hard ? ESongDifficulty::Hard : ESongDifficulty::Normal;
+	}
+}
+
+URhythmSettingsSubsystem* USongSelectWidget::GetRhythmSettings() const
+{
+	const UGameInstance* GameInstance = GetGameInstance();
+	return GameInstance ? GameInstance->GetSubsystem<URhythmSettingsSubsystem>() : nullptr;
+}
 
 void USongSelectWidget::NativeConstruct()
 {
@@ -22,14 +44,23 @@ void USongSelectWidget::NativeConstruct()
 
 	SpeedButtons = { SpeedButton1, SpeedButton2, SpeedButton3, SpeedButton4, SpeedButton5 };
 
-	// �������
+	// 初期状態
 	bClosing = false;
 	SetRenderOpacity(1.0f);
 	SetRenderScale(FVector2D(1.0f, 1.0f));
-	SetSelectedDifficulty(ESongDifficulty::Normal);
-	SetSelectedSpeed(3);
+	// 難易度・速度は設定置き場（前回選んだ値・セーブされた速度）から表示する。無ければ NORMAL・速度3
+	if (const URhythmSettingsSubsystem* Settings = GetRhythmSettings())
+	{
+		SetSelectedDifficulty(ToSongDifficulty(Settings->GetDifficulty()));
+		SetSelectedSpeed(Settings->GetNoteSpeedLevel());
+	}
+	else
+	{
+		SetSelectedDifficulty(ESongDifficulty::Normal);
+		SetSelectedSpeed(3);
+	}
 
-	// �p�b�h����L�[�ő���ł���悤�ɁA�ŏ��̃t�H�[�J�X���X�^�[�g�ɒu��
+	// パッドや矢印キーで操作できるように、最初のフォーカスをスタートに置く
 	StartButton->SetKeyboardFocus();
 }
 
@@ -45,7 +76,7 @@ void USongSelectWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	ElapsedClose += InDeltaTime;
 	const float T = FMath::Clamp(ElapsedClose / FMath::Max(FadeDuration, 0.01f), 0.0f, 1.0f);
 
-	// �ŏ��͑����A�Ō�͂�����������
+	// 最初は速く、最後はゆっくり消える
 	const float Eased = FMath::InterpEaseOut(0.0f, 1.0f, T, 2.0f);
 
 	SetRenderOpacity(1.0f - Eased);
@@ -95,30 +126,48 @@ void USongSelectWidget::CloseWithFade()
 	bClosing = true;
 	ElapsedClose = 0.0f;
 
-	// �����Ă���Œ��ɁA�{�^����������Ȃ��悤�ɂ���(�����ڂ͕ς��Ȃ�)
+	// 消えている最中に、ボタンが押されないようにする(見た目は変えない)
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 }
 
-// ---- �{�^���̃N���b�N ----
+// ---- ボタンのクリック ----
 
 void USongSelectWidget::HandleSongPrev() { OnSongChangeRequested.Broadcast(-1); }
 void USongSelectWidget::HandleSongNext() { OnSongChangeRequested.Broadcast(+1); }
 
 void USongSelectWidget::HandleNormal()
 {
-	SetSelectedDifficulty(ESongDifficulty::Normal);
-	OnDifficultySelected.Broadcast(ESongDifficulty::Normal);
+	SelectDifficulty(ESongDifficulty::Normal);
 }
 
 void USongSelectWidget::HandleHard()
 {
-	SetSelectedDifficulty(ESongDifficulty::Hard);
-	OnDifficultySelected.Broadcast(ESongDifficulty::Hard);
+	SelectDifficulty(ESongDifficulty::Hard);
+}
+
+void USongSelectWidget::SelectDifficulty(ESongDifficulty Difficulty)
+{
+	SetSelectedDifficulty(Difficulty);
+
+	// 設定置き場に保存（プレイ画面の譜面選びに使う。速度は変えない）
+	if (URhythmSettingsSubsystem* Settings = GetRhythmSettings())
+	{
+		Settings->SetDifficulty(ToRhythmDifficulty(Difficulty));
+	}
+
+	OnDifficultySelected.Broadcast(Difficulty);
 }
 
 void USongSelectWidget::SelectSpeed(int32 Speed)
 {
 	SetSelectedSpeed(Speed);
+
+	// 設定置き場に保存（プレイ画面のノーツ速度に使う。自動でセーブされる）
+	if (URhythmSettingsSubsystem* Settings = GetRhythmSettings())
+	{
+		Settings->SetNoteSpeedLevel(Speed);
+	}
+
 	OnSpeedSelected.Broadcast(Speed);
 }
 

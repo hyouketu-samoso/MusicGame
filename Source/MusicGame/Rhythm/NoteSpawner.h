@@ -69,26 +69,73 @@ public:
     ) override;
 
 
+    // 判定ラインをエディタのビューポートでも表示するため、プレイ中以外もTickさせる
+    virtual bool ShouldTickIfViewportsOnly() const override
+    {
+        return bShowJudgeLine;
+    }
+
+
+    // ========================================================
+    // Blueprint から呼べる操作
+    // ========================================================
+
+    // 譜面を開始する（譜面が読み込まれている必要がある）
+    UFUNCTION(BlueprintCallable, Category = "Note Spawner")
+    void StartChart();
+
+
+    // 全レーンに1個ずつノーツを飛ばす
+    UFUNCTION(BlueprintCallable, Category = "Note Spawner")
+    void SpawnWave();
+
+
+    // 指定レーンにノーツを1個飛ばす
+    UFUNCTION(BlueprintCallable, Category = "Note Spawner")
+    void SpawnNote(
+        int32 LaneIndex
+    );
+
+
+    // 指定レーンにホールドノーツを1個飛ばす
+    UFUNCTION(BlueprintCallable, Category = "Note Spawner")
+    void SpawnHoldNote(
+        int32 LaneIndex,
+        float HoldDuration
+    );
+
+
+    // ランダムなレーンにノーツを1個飛ばす（HoldChance の確率でホールド）
+    UFUNCTION(BlueprintCallable, Category = "Note Spawner")
+    void SpawnRandomNote();
+
+
     // ========================================================
     // Camera
     // ========================================================
 
 protected:
 
+    // true なら Play 開始時にこのActorのカメラの視点に切り替える
     UPROPERTY(EditAnywhere, Category = "Note Spawner|Camera")
     bool bAutoCamera = true;
 
-    UPROPERTY(EditAnywhere, Category = "Note Spawner|Camera")
-    float CameraDistance = 1800.0f;
+    // 判定ラインからカメラまでの距離（後ろ方向）
+    // ※ LaneTargetOffsets の V字はカメラが初期値のときに UI に合わせた値。変えたら合わせ直す
+    UPROPERTY(EditAnywhere, Category = "Note Spawner|Camera", meta = (Units = "cm", EditCondition = "bAutoCamera"))
+    float CameraDistance = 700.0f;
 
-    UPROPERTY(EditAnywhere, Category = "Note Spawner|Camera")
-    float CameraHeight = 1000.0f;
+    // 判定ラインからのカメラの高さ
+    UPROPERTY(EditAnywhere, Category = "Note Spawner|Camera", meta = (Units = "cm", EditCondition = "bAutoCamera"))
+    float CameraHeight = 400.0f;
 
-    UPROPERTY(EditAnywhere, Category = "Note Spawner|Camera")
-    float CameraPitch = -25.0f;
+    // カメラの上下の向き。マイナスで見下ろす
+    UPROPERTY(EditAnywhere, Category = "Note Spawner|Camera", meta = (ClampMin = -89.0, ClampMax = 89.0, Units = "deg", EditCondition = "bAutoCamera"))
+    float CameraPitch = -15.0f;
 
-    UPROPERTY(EditAnywhere, Category = "Note Spawner|Camera")
-    float CameraFieldOfView = 60.0f;
+    // 視野角（左右）。小さいほどズーム
+    UPROPERTY(EditAnywhere, Category = "Note Spawner|Camera", meta = (ClampMin = 10.0, ClampMax = 170.0, Units = "deg", EditCondition = "bAutoCamera"))
+    float CameraFieldOfView = 90.0f;
 
 
     // ========================================================
@@ -131,7 +178,10 @@ protected:
     TArray<FLinearColor> LaneColors;
 
 
-    // 判定ラインにおける各レーンの位置
+    // 判定ラインにおける各レーンの位置（このActorからの相対位置、cm）
+    // X = 前後（マイナスで手前）、Y = 左右（マイナスで左）、Z = 上下。
+    // 初期値はプレイ画面UI（WBP_GameMain）の判定バー4本に重なる V字（カメラ初期値のとき）。
+    // 要素数がレーン数と同じときに使い、空にすると LaneSpacing 間隔の横一列になる
     UPROPERTY(
         EditAnywhere,
         Category = "Note Spawner|Lane"
@@ -176,12 +226,22 @@ protected:
     float ArcHeight = 400.0f;
 
 
-    // 生成位置から判定ラインまでの移動時間
+    // ※ 生成位置から判定ラインまでの移動時間（到達時間）は、プレイヤーが選んだノーツ速度（1〜5）で決まる。
+    //   速度ごとの秒数は「プロジェクト設定 → ゲーム → Rhythm Game」で管理（難易度調整仕様書の調整値一覧）
+
+
+    // テスト用：1〜5 にすると、プレイヤー設定の代わりにこのノーツ速度を使う（0 = プレイヤー設定。セーブデータは変えない）
     UPROPERTY(
         EditAnywhere,
-        Category = "Note Spawner|Movement"
+        Category = "Note Spawner|Movement",
+        meta = (ClampMin = 0, ClampMax = 5)
     )
-    float TravelTime = 2.5f;
+    int32 TestSpeedLevelOverride = 0;
+
+
+    // ノーツ速度を反映した移動時間（到達時間）
+    UFUNCTION(BlueprintPure, Category = "Note Spawner")
+    float GetEffectiveTravelTime() const;
 
 
     // ========================================================
@@ -196,7 +256,7 @@ protected:
     bool bUseChart = true;
 
 
-    // チャートファイル
+    // チャートファイル（NORMAL）。Content フォルダからの相対パス
     UPROPERTY(
         EditAnywhere,
         Category = "Note Spawner|Chart"
@@ -204,12 +264,13 @@ protected:
     FString ChartFilePath = TEXT("Chart/Demo.json");
 
 
-    // ========================================================
-    // Chart Start
-    // ========================================================
-
-    // 外部からチャートを開始する
-    void StartChart();
+    // チャートファイル（HARD）。空なら NORMAL と同じ譜面を使う
+    // 難易度で変わるのは譜面だけ（速度・判定幅・スコアは共通）
+    UPROPERTY(
+        EditAnywhere,
+        Category = "Note Spawner|Chart"
+    )
+    FString HardChartFilePath;
 
 
     // ========================================================
@@ -342,26 +403,7 @@ protected:
         float HoldDuration
     );
 
-
-    // 通常ノーツ
-    void SpawnNote(
-        int32 LaneIndex
-    );
-
-
-    // ホールドノーツ
-    void SpawnHoldNote(
-        int32 LaneIndex,
-        float HoldDuration
-    );
-
-
-    // ランダムノーツ
-    void SpawnRandomNote();
-
-
-    // 全レーン生成
-    void SpawnWave();
+    // ※ SpawnNote / SpawnHoldNote / SpawnRandomNote / SpawnWave は public（Blueprint から呼べる）
 
 
     // ランダム生成タイマーから呼ばれる
