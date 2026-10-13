@@ -5,13 +5,16 @@
 //  出口 : OnLaneInput(FLaneInput)
 //		   OnPauseInput() ←Esc/Startボタン
 //  Lane : 0=L←, 1=L→, 2=R←, 3=R→
-// Timestampは現在ワールド時間(仮)。後Cで楽曲時間に差し替える
+// Timestampは現在ワールド時間(仮)。後で楽曲時間に差し替える
 // ============================================================
 #pragma once
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "RhythmInputTypes.h"
 #include "RhythmInputComponent.generated.h"
+
+class USoundMix;
+class USoundClass;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnLaneInput, const FLaneInput&, Input);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPauseInput);
@@ -66,6 +69,8 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Rhythm|Hold")
 	FOnLaneHold OnLaneHoldEnd;
 
+	// 音量(0～10) UIの◀▶
+
 	UPROPERTY(EditAnywhere, Category = "Rhythm|Stick", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float FireThreshold = 0.70f;	// 入力成立値(これ以上倒れたら発火)
 
@@ -105,16 +110,68 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Rhythm|Vibration")
 	bool IsVibrationEnabled() const { return bVibrationEnabled; }
 
+	UFUNCTION(BlueprintCallable, Category = "Rhythm|Audio")
+	void ChangeBGMVolumeStep(int32 Delta);
+
+	UFUNCTION(BlueprintCallable, Category = "Rhythm|Audio")
+	void ChangeSEVolumeStep(int32 Delta);
+
+	UFUNCTION(BlueprintPure, Category = "Rhythm|Audio")
+	int32 GetBGMVolumeLevel() const { return BGMVolumeLevel; }
+
+	UFUNCTION(BlueprintPure, Category = "Rhythm|Audio")
+	int32 GetSEVolumeLevel() const { return SEVolumeLevel; }
+
+	// 音量オーバーライドを載せる Sound Mix(中身は空でよい)
+	UPROPERTY(EditAnywhere, Category = "Rhythm|Audio")
+	TObjectPtr<USoundMix> SoundMix;
+
+	UPROPERTY(EditAnywhere, Category = "Rhythm|Audio")
+	TObjectPtr<USoundClass> BGMClass;
+
+	UPROPERTY(EditAnywhere, Category = "Rhythm|Audio")
+	TObjectPtr<USoundClass> SEClass;
+
+	UFUNCTION(BlueprintCallable,Category = "Rhythm|Audio")
+	void ChangeMasterVolumeStep(int32 Delta);
+
+	UFUNCTION(BlueprintPure,Category = "Rhythm|Audio")
+	int32 GetMasterVolumeLevel() const { return MasterVolumeLevel; }
+
+	// スライダー用 値を直接設定して反映する
+	UFUNCTION(BlueprintCallable,Category = "Rhythm|Audio")
+	void SetMasterVolumeLevel(int32 Level);
+
+	UFUNCTION(BlueprintCallable, Category = "Rhythm|Audio")
+	void SetBGMVolumeLevel(int32 Level);
+
+	UFUNCTION(BlueprintCallable, Category = "Rhythm|Audio")
+	void SetSEVolumeLevel(int32 Level);
+
+	// 音量の保存。スライダーを操作し終えたときに呼ぶ
+	UFUNCTION(BlueprintCallable, Category = "Rhythm|Audio")
+	void SaveVolumeSettings();
+
 	void SaveInputSettings();
 	void LoadInputSettings();
 
 private:
 	int32 SensitivityLevel = 3;
+	int32 BGMVolumeLevel = 100;
+	int32 SEVolumeLevel = 100;
+	int32 MasterVolumeLevel = 100;
 
+	bool bVolumeDirty = false;
+	
+	void ApplyVolumes();
+
+	
 protected:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 		FActorComponentTickFunction* ThisTickFunction)override;
 	virtual void BeginPlay() override;
+
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
 	void UpdateStick(float x, FStickState& State, int32 LeftLane, int32 RightLane, double Now);
