@@ -24,6 +24,7 @@ void UGameMainWidget::NativeConstruct()
 
 	// 初期表示
 	SetScore(0);
+	// SetHP(今の体力,最大値の体力)
 	SetHP(100, 100);  // 最大値を 0 にしないための仮の値(本当の値は、体力を持つ人が SetHP で渡す)
 	SetCombo(0);
 	if (JudgementText)
