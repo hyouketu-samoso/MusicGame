@@ -6,6 +6,7 @@
 #include "ChartImporter.h"
 #include "RhythmSettingsSubsystem.h"
 #include "RhythmGameSettings.h"
+#include "RhythmFeedbackComponent.h"
 #include "Engine/GameInstance.h"
 
 #include "Camera/CameraComponent.h"
@@ -60,6 +61,16 @@ ANoteSpawner::ANoteSpawner()
 	}
 
 #endif
+
+
+	// ========================================================
+	// Feedback（判定エフェクト・SE）
+	// ========================================================
+
+	Feedback =
+		CreateDefaultSubobject<URhythmFeedbackComponent>(
+			TEXT("Feedback")
+		);
 
 
 	// ========================================================
@@ -169,6 +180,13 @@ void ANoteSpawner::BeginPlay()
 				"NoteSpawner: RhythmJudgeを自動生成しました"
 			)
 		);
+	}
+
+
+	// 判定が出たらエフェクト・SE を出す
+	if (Feedback && Judge)
+	{
+		Feedback->BindJudge(Judge);
 	}
 
 

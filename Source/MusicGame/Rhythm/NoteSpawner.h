@@ -16,6 +16,7 @@
 class ANoteActor;
 class AHoldNoteActor;
 class ARhythmJudge;
+class URhythmFeedbackComponent;
 class UCameraComponent;
 class UArrowComponent;
 
@@ -110,6 +111,13 @@ public:
     void SpawnRandomNote();
 
 
+    // 指定レーンの判定ライン位置を取得（ワールド座標。判定エフェクトの位置にも使う）
+    UFUNCTION(BlueprintPure, Category = "Note Spawner")
+    FVector GetLaneTarget(
+        int32 LaneIndex
+    ) const;
+
+
     // ========================================================
     // Camera
     // ========================================================
@@ -164,6 +172,15 @@ protected:
         Category = "Note Spawner|Note"
     )
     ARhythmJudge* Judge = nullptr;
+
+
+    // 判定の演出（エフェクト・SE）。中身はこのコンポーネントの詳細パネルで設定する
+    UPROPERTY(
+        VisibleAnywhere,
+        BlueprintReadOnly,
+        Category = "Note Spawner|Feedback"
+    )
+    URhythmFeedbackComponent* Feedback = nullptr;
 
 
     // ========================================================
@@ -412,16 +429,6 @@ protected:
 
     // レーンが使用可能か
     bool IsLaneFree(
-        int32 LaneIndex
-    ) const;
-
-
-    // ========================================================
-    // Lane
-    // ========================================================
-
-    // 指定レーンの判定ライン位置を取得
-    FVector GetLaneTarget(
         int32 LaneIndex
     ) const;
 
