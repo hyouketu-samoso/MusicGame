@@ -6,6 +6,8 @@
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
 #include "Engine/World.h"
+#include "Combo/ComboCounterWidget.h"
+#include "Score/ScoreCounterWidget.h"
 
 void UGameMainWidget::NativeConstruct()
 {
@@ -31,6 +33,29 @@ void UGameMainWidget::NativeConstruct()
 	{
 		JudgementText->SetVisibility(ESlateVisibility::Collapsed);
 	}
+
+	// 【確認用・あとで消す】0.4秒ごとにコンボを増やす
+	{
+		static int32 TestCombo = 0;
+		TestCombo = 0;
+		FTimerHandle TestHandle;
+		GetWorld()->GetTimerManager().SetTimer(TestHandle, FTimerDelegate::CreateWeakLambda(this, [this]()
+			{
+				SetCombo(++TestCombo);
+			}), 0.4f, true);
+	}
+
+	// 【確認用・あとで消す】0.8秒ごとにスコアを100ずつ増やす
+	{
+		static int32 TestScore = 0;
+		TestScore = 0;
+		FTimerHandle TestScoreHandle;
+		GetWorld()->GetTimerManager().SetTimer(TestScoreHandle, FTimerDelegate::CreateWeakLambda(this, [this]()
+			{
+				TestScore += 100;
+				SetScore(TestScore);
+			}), 0.7f, true);
+	}
 }
 
 void UGameMainWidget::PlayVideos()
@@ -53,9 +78,15 @@ void UGameMainWidget::StopVideos()
 	if (Player2) { Player2->Close(); }
 }
 
-// スコアの表示を更新する(5桁のゼロ埋め。マイナスは 0 にする)
 void UGameMainWidget::SetScore(int32 Score)
 {
+	// 動きのあるスコア
+	if (ScoreCounter)
+	{
+		ScoreCounter->SetScore(Score);
+	}
+
+	// 古い文字のスコア(WBP に残っているときだけ)
 	if (ScoreText)
 	{
 		ScoreText->SetText(FText::FromString(
@@ -83,20 +114,27 @@ void UGameMainWidget::SetHP(int32 CurrentHP, int32 MaxHP)
 // コンボの表示を更新する(0 以下のときは、文字ごと隠す)
 void UGameMainWidget::SetCombo(int32 Combo)
 {
-	if (!ComboText)
+	// 画像の数字(縦に流れる動き)
+	if (ComboCounter)
 	{
-		return;
+		ComboCounter->SetCombo(Combo);
 	}
 
-	if (Combo <= 0)
+	// 古い文字の表示(WBP に残っているときだけ)
+	if (ComboText)
 	{
-		ComboText->SetVisibility(ESlateVisibility::Collapsed);
-		return;
+		if (Combo <= 0)
+		{
+			ComboText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		else
+		{
+			ComboText->SetText(FText::FromString(FString::Printf(TEXT("%d"), Combo)));
+			ComboText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
 	}
-
-	ComboText->SetText(FText::FromString(FString::Printf(TEXT("%d"), Combo)));
-	ComboText->SetVisibility(ESlateVisibility::HitTestInvisible);
 }
+
 
 // 判定を表示して、JudgementDisplaySeconds 秒後に消す
 // 続けて呼ばれたときは、前のタイマーを止めて、表示し直す
