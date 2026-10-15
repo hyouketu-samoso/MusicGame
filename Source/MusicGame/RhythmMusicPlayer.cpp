@@ -1,3 +1,4 @@
+
 #include "RhythmMusicPlayer.h"
 
 #include "Components/AudioComponent.h"
@@ -20,7 +21,6 @@ void ARhythmMusicPlayer::BeginPlay()
 {
     Super::BeginPlay();
 
-    // Select the first song at startup without playing it automatically
     if (Songs.IsValidIndex(0) && Songs[0])
     {
         CurrentSongIndex = 0;
@@ -148,14 +148,12 @@ void ARhythmMusicPlayer::HandleSongChangeRequested(int32 Direction)
         return;
     }
 
-    // Select the first song if the current index is invalid
     if (!Songs.IsValidIndex(CurrentSongIndex))
     {
         PlaySongByIndex(0);
         return;
     }
 
-    // Move to the previous or next song, looping at either end
     const int32 NextIndex =
         (CurrentSongIndex + Direction + SongCount) % SongCount;
 
