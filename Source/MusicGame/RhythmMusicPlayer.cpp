@@ -1,4 +1,4 @@
-
+```cpp
 #include "RhythmMusicPlayer.h"
 
 #include "Components/AudioComponent.h"
@@ -21,7 +21,7 @@ void ARhythmMusicPlayer::BeginPlay()
 {
     Super::BeginPlay();
 
-    // 起動時は1曲目を選択するだけで、自動再生はしない
+    // Select the first song at startup without playing it automatically
     if (Songs.IsValidIndex(0) && Songs[0])
     {
         CurrentSongIndex = 0;
@@ -30,7 +30,7 @@ void ARhythmMusicPlayer::BeginPlay()
         UE_LOG(
             LogTemp,
             Warning,
-            TEXT("[MusicPlayer] 初期曲: %s"),
+            TEXT("[MusicPlayer] Initial song: %s"),
             *CurrentSongData->SongTitle.ToString()
         );
     }
@@ -42,7 +42,7 @@ void ARhythmMusicPlayer::BeginPlay()
         UE_LOG(
             LogTemp,
             Error,
-            TEXT("[MusicPlayer] Songsに曲データが設定されていません")
+            TEXT("[MusicPlayer] No song data is configured in Songs")
         );
     }
 }
@@ -54,7 +54,7 @@ void ARhythmMusicPlayer::PlaySongByIndex(int32 Index)
         UE_LOG(
             LogTemp,
             Error,
-            TEXT("[MusicPlayer] 無効な曲番号: %d"),
+            TEXT("[MusicPlayer] Invalid song index: %d"),
             Index
         );
         return;
@@ -66,7 +66,7 @@ void ARhythmMusicPlayer::PlaySongByIndex(int32 Index)
     UE_LOG(
         LogTemp,
         Warning,
-        TEXT("[MusicPlayer] 曲を選択: Index=%d, Title=%s"),
+        TEXT("[MusicPlayer] Song selected: Index=%d, Title=%s"),
         CurrentSongIndex,
         *CurrentSongData->SongTitle.ToString()
     );
@@ -81,7 +81,7 @@ void ARhythmMusicPlayer::PlayMusic()
         UE_LOG(
             LogTemp,
             Warning,
-            TEXT("[MusicPlayer] 再生できません。曲が未選択です")
+            TEXT("[MusicPlayer] Cannot play music. No song is selected")
         );
         return;
     }
@@ -93,7 +93,7 @@ void ARhythmMusicPlayer::PlayMusic()
         UE_LOG(
             LogTemp,
             Error,
-            TEXT("[MusicPlayer] MusicSoundが未設定です: %s"),
+            TEXT("[MusicPlayer] MusicSound is not set: %s"),
             *CurrentSongData->SongTitle.ToString()
         );
         return;
@@ -149,14 +149,14 @@ void ARhythmMusicPlayer::HandleSongChangeRequested(int32 Direction)
         return;
     }
 
-    // 現在の曲番号が無効なら、最初の曲を選択
+    // Select the first song if the current index is invalid
     if (!Songs.IsValidIndex(CurrentSongIndex))
     {
         PlaySongByIndex(0);
         return;
     }
 
-    // 前後の曲へ移動し、端ではループする
+    // Move to the previous or next song, looping at either end
     const int32 NextIndex =
         (CurrentSongIndex + Direction + SongCount) % SongCount;
 
@@ -177,3 +177,4 @@ int32 ARhythmMusicPlayer::GetCurrentSongIndex() const
 {
     return CurrentSongIndex;
 }
+```
