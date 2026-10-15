@@ -11,6 +11,8 @@ class UMediaPlayer;
 class UMediaSource;
 class UTextBlock;
 class UProgressBar;
+class UComboCounterWidget;   // 前方宣言に追加
+class UScoreCounterWidget;
 
 // 判定の種類(判定を担当する人が、これを渡して ShowJudgement を呼ぶ)
 UENUM(BlueprintType)
@@ -84,6 +86,9 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UProgressBar> HPBar;   // 体力ゲージ(Progress Bar)
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> ComboText;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> JudgementText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UComboCounterWidget> ComboCounter;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UScoreCounterWidget> ScoreCounter;
+
 
 private:
 	// 判定の文字を消す(タイマーから呼ばれる)
