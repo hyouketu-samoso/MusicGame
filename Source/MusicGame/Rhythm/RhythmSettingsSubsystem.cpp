@@ -63,12 +63,26 @@ void URhythmSettingsSubsystem::SetDifficulty(ERhythmDifficulty NewDifficulty)
 	OnDifficultyChanged.Broadcast(Difficulty);
 }
 
+void URhythmSettingsSubsystem::SetInputOffsetMs(int32 NewOffsetMs)
+{
+	const int32 Clamped = FMath::Clamp(NewOffsetMs, -MaxInputOffsetMs, MaxInputOffsetMs);
+	if (Clamped == InputOffsetMs)
+	{
+		return;
+	}
+
+	InputOffsetMs = Clamped;
+	SaveSettings();
+	OnInputOffsetChanged.Broadcast(InputOffsetMs);
+}
+
 void URhythmSettingsSubsystem::SaveSettings() const
 {
 	URhythmPlayerSettingsSaveGame* Save = Cast<URhythmPlayerSettingsSaveGame>(UGameplayStatics::CreateSaveGameObject(URhythmPlayerSettingsSaveGame::StaticClass()));
 	if (Save)
 	{
 		Save->NoteSpeedLevel = NoteSpeedLevel;
+		Save->InputOffsetMs = InputOffsetMs;
 		UGameplayStatics::SaveGameToSlot(Save, SettingsSlotName, SettingsUserIndex);
 	}
 }
@@ -84,5 +98,11 @@ void URhythmSettingsSubsystem::LoadSettings()
 	if (Save && Save->NoteSpeedLevel > 0)
 	{
 		NoteSpeedLevel = FMath::Clamp(Save->NoteSpeedLevel, GetMinNoteSpeedLevel(), GetMaxNoteSpeedLevel());
+	}
+
+	// 古いセーブデータには無いので、その場合は0のまま
+	if (Save)
+	{
+		InputOffsetMs = FMath::Clamp(Save->InputOffsetMs, -MaxInputOffsetMs, MaxInputOffsetMs);
 	}
 }

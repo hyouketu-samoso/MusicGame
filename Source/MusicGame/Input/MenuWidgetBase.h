@@ -41,6 +41,10 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent,Category = "Menu")
 	void OnMenuButtonFocused(UButton* FocusedButton);
 
+	// 下(A)が押されたときに呼ばれる（戻る）。何をするかは WBP 側で決める
+	UFUNCTION(BlueprintImplementableEvent, Category = "Menu")
+	void OnMenuBackRequested();
+
 	// ON状態のButtonの色(フォーカスされていない時)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Menu")
 	FLinearColor ToggledOnColor = FLinearColor(0.2f, 0.6f, 1.0f, 1.0f);

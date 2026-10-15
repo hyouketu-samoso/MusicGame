@@ -76,6 +76,16 @@ void UMenuWidgetBase::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 FReply UMenuWidgetBase::NativeOnPreviewKeyDown(const FGeometry& InGeometry,
 	const FKeyEvent& InKeyEvent)
 {
+	// 下(A)は「戻る」。ボタンは押さず、WBP にイベントで知らせる
+	if (InKeyEvent.GetKey() == EKeys::Gamepad_FaceButton_Bottom)
+	{
+		if (!InKeyEvent.IsRepeat())
+		{
+			OnMenuBackRequested();
+		}
+		return FReply::Handled();
+	}
+
 	// B(Xbox: B / PS: ○)で、選択中のButtonを実行する
 	if (InKeyEvent.GetKey() == EKeys::Gamepad_FaceButton_Right
 		&& !InKeyEvent.IsRepeat())

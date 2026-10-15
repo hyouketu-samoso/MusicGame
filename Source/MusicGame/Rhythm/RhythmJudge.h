@@ -135,4 +135,6 @@ private:
 	// 押し続けている最中のホールド（キー = レーン番号）
 	UPROPERTY()
 	TMap<int32, TObjectPtr<AHoldNoteActor>> HoldingNotes;
+
+	double GetInputOffsetSec() const;
 };

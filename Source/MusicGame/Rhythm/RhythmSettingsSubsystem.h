@@ -19,6 +19,7 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNoteSpeedLevelChanged, int32, NewSpeedLevel);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDifficultyChanged, ERhythmDifficulty, NewDifficulty);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInputOffsetChanged, int32, NewOffsetMs);
 
 // セーブデータ（ノーツ速度だけを保存する）
 // ※ 入力設定（デッドゾーン・感度・振動）のセーブデータ URhythmSettingsSaveGame（Input フォルダ）とは別物
@@ -32,6 +33,10 @@ public:
 	// ノーツ速度（1〜5）。0 は未保存
 	UPROPERTY()
 	int32 NoteSpeedLevel = 0;
+
+	// 入力タイミング調整値（ミリ秒）
+	UPROPERTY()
+	int32 InputOffsetMs = 0;
 };
 
 UCLASS()
@@ -89,6 +94,25 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="Rhythm Settings")
 	FOnDifficultyChanged OnDifficultyChanged;
 
+	// ---- 入力タイミング調整(ミリ秒) ----
+	// 判定は「入力時刻 - 調整値」で行う。遅れて押す人はプラス、早く押す人はマイナス
+	static constexpr int32 MaxInputOffsetMs = 160;
+
+	UFUNCTION(BlueprintPure, Category = "Rhyyhm Settings")
+	int32 GetInputOffsetMs() const { return InputOffsetMs; }
+
+	UFUNCTION(BlueprintPure, Category = "Rhythm Settings")
+	float GetInputOffsetSec() const { return InputOffsetMs / 1000.0f; }
+
+	UFUNCTION(BlueprintCallable, Category = "Rhythm Settings")
+	void SetInputOffsetMs(int32 NewOffsetMs);
+
+	UFUNCTION(BlueprintCallable, Category = "Rhythm Settings")
+	void ResetInputOffset() { SetInputOffsetMs(0); }
+
+	UPROPERTY(BlueprintAssignable, Category = "Rhythm Settings")
+	FOnInputOffsetChanged OnInputOffsetChanged;
+
 private:
 
 	// セーブデータへの書き込み・読み込み
@@ -98,4 +122,6 @@ private:
 	int32 NoteSpeedLevel = 3;
 
 	ERhythmDifficulty Difficulty = ERhythmDifficulty::Normal;
+
+	int32 InputOffsetMs = 0;
 };
