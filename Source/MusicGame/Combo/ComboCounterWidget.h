@@ -30,6 +30,7 @@ struct FComboDigitSlot
 	int32 Digit = -1;          // いま表示している数字(-1 は、まだ何もない)
 	float Elapsed = 0.0f;      // 動き始めてからの秒数
 	bool  bAnimating = false;  // 動いている最中か
+	bool  bHasOld = false;     // 古い数字の画像が入っているか(入っていないと、白い四角に見えるので、動かさない)
 };
 
 UCLASS()
