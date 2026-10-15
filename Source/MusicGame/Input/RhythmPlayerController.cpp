@@ -5,6 +5,8 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "BackVideoActor.h"
 #include "SongSelectWidget.h"
+#include "TimingAdjustWidget.h"
+#include "HAL/PlatformTime.h"
 
 ARhythmPlayerController::ARhythmPlayerController()
 {
@@ -44,6 +46,7 @@ void ARhythmPlayerController::BeginPlay()
 		if (SongSelectWidget)
 		{
 			SongSelectWidget->OnClosed.AddDynamic(this, &ARhythmPlayerController::HandleSongSelectClosed);
+			SongSelectWidget->OnTimingAdjustRequested.AddDynamic(this, &ARhythmPlayerController::HandleTimingAdjustRequested);
 			SongSelectWidget->AddToViewport(100);
 
 			FInputModeUIOnly Mode;
@@ -67,8 +70,52 @@ void ARhythmPlayerController::HandleSongSelectClosed()
 	SongSelectWidget = nullptr;
 }
 
+void ARhythmPlayerController::HandleTimingAdjustRequested()
+{
+	if (!SongSelectWidget || !TimingAdjustWidgetClass || TimingAdjustWidget)
+	{
+		return;
+	}
+
+	TimingAdjustWidget = CreateWidget<UTimingAdjustWidget>(this, TimingAdjustWidgetClass);
+	if (!TimingAdjustWidget)
+	{
+		return;
+	}
+
+	TimingAdjustWidget->OnClosed.AddDynamic(this, &ARhythmPlayerController::HandleTimingAdjustClosed);
+
+	// 曲選択は隠しておく（下のボタンを押せないようにする）
+	SongSelectWidget->SetVisibility(ESlateVisibility::Collapsed);
+	TimingAdjustWidget->AddToViewport(200);
+
+	FInputModeUIOnly Mode;
+	Mode.SetWidgetToFocus(TimingAdjustWidget->TakeWidget());
+	SetInputMode(Mode);
+}
+
+void ARhythmPlayerController::HandleTimingAdjustClosed()
+{
+	TimingAdjustWidget = nullptr;
+
+	if (!SongSelectWidget)
+	{
+		return;
+	}
+
+	SongSelectWidget->SetVisibility(ESlateVisibility::Visible);
+
+	FInputModeUIOnly Mode;
+	Mode.SetWidgetToFocus(SongSelectWidget->TakeWidget());
+	SetInputMode(Mode);
+}
+
 void ARhythmPlayerController::HandlePauseInput()
 {
+	if (bPauseInputBlocked || FPlatformTime::Seconds() < PauseInputIgnoreUntil)
+	{
+		return;
+	}
 	// 曲選択が出ている間は、ポーズを受け付けない
 	if (SongSelectWidget)
 	{
@@ -140,4 +187,15 @@ void ARhythmPlayerController::ResumeGame()
 void ARhythmPlayerController::QuitToWindows()
 {
 	UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
+}
+
+void ARhythmPlayerController::SetPauseInputBlocked(bool bBlocked)
+{
+	bPauseInputBlocked = bBlocked;
+
+	// 解除した直後は、同じ Esc の入力が残っているので、少しの間だけ無視する
+	if (!bBlocked)
+	{
+		PauseInputIgnoreUntil = FPlatformTime::Seconds() + 0.3;
+	}
 }

@@ -14,6 +14,7 @@ class URhythmInputComponent;
 class UUserWidget;
 class ABackVideoActor;
 class USongSelectWidget;
+class UTimingAdjustWidget;
 
 UCLASS()
 class MUSICGAME_API ARhythmPlayerController : public APlayerController
@@ -55,6 +56,10 @@ public:
 	UPROPERTY()
 	TObjectPtr<ABackVideoActor> BackVideo;
 
+	// 調整画面を開いている間、ポーズの開閉入力を無視する（WBP から呼ぶ）
+	UFUNCTION(BlueprintCallable, Category = "Rhythm|Pause")
+	void SetPauseInputBlocked(bool bBlocked);
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -76,10 +81,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<USongSelectWidget> SongSelectWidgetClass;
 
+	UPROPERTY(EditAnywhere,BlueprintReadOnly,Category = "UI")
+	TSubclassOf<UTimingAdjustWidget>TimingAdjustWidgetClass;
+
 private:
 	UPROPERTY()
 	TObjectPtr<USongSelectWidget> SongSelectWidget;
 
 	UFUNCTION()
 	void HandleSongSelectClosed();
+
+	UPROPERTY()
+	TObjectPtr<UTimingAdjustWidget> TimingAdjustWidget;
+
+	UFUNCTION()
+	void HandleTimingAdjustRequested();
+
+	UFUNCTION()
+	void HandleTimingAdjustClosed();
+
+	bool bPauseInputBlocked = false;
+	double PauseInputIgnoreUntil = 0.0;
 };

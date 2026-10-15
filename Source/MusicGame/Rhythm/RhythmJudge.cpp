@@ -2,10 +2,12 @@
 #include "NoteActor.h"
 #include "HoldNoteActor.h"
 #include "RhythmScoreComponent.h"
+#include "RhythmSettingsSubsystem.h"
 #include "Input/RhythmInputComponent.h"
 #include "Components/InputComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Engine/GameInstance.h"
 #include "GameFramework/PlayerController.h"
 
 ARhythmJudge::ARhythmJudge()
@@ -68,7 +70,7 @@ void ARhythmJudge::Tick(float DeltaTime)
 		return;
 	}
 
-	const double Now = GetWorld()->GetTimeSeconds();
+	const double Now = GetWorld()->GetTimeSeconds() - GetInputOffsetSec();
 
 	// 押されないまま BadWindow を過ぎたノーツはミス
 	for (int32 i = ActiveNotes.Num() - 1; i >= 0; --i)
@@ -122,6 +124,13 @@ void ARhythmJudge::Tick(float DeltaTime)
 	}
 }
 
+double ARhythmJudge::GetInputOffsetSec() const
+{
+	const UGameInstance* GI = GetGameInstance();
+	const URhythmSettingsSubsystem* S = GI ? GI->GetSubsystem<URhythmSettingsSubsystem>() : nullptr;
+	return S ? S->GetInputOffsetSec() : 0.0;
+}
+
 void ARhythmJudge::RegisterNote(ANoteActor* Note)
 {
 	if (IsValid(Note))
@@ -145,7 +154,7 @@ void ARhythmJudge::PressLaneAt(int32 LaneIndex, double InputTime)
 		return;
 	}
 
-	const double Now = InputTime;
+	const double Now = InputTime - GetInputOffsetSec();
 
 	// 候補：同じレーン・未判定・−BadWindow ≤ Δt ≤ +BadWindow（Δt = 入力時刻 − ノーツの判定時刻）
 	// 対象：候補のうち |Δt| が最小のノーツ。|Δt| が同じなら判定時刻が早いノーツ（入力判定仕様書「判定仕様」）
@@ -186,6 +195,10 @@ void ARhythmJudge::PressLaneAt(int32 LaneIndex, double InputTime)
 	const float Error = static_cast<float>(Now - Note->GetHitTime());
 	const ERhythmJudgement Judgement = CalcJudgement(FMath::Abs(Error));
 
+	// デバック用
+	UE_LOG(LogTemp, Warning, TEXT("OffsetTest lane=%d raw=%+.0fms adjusted=%+.0fms offset=%+.0fms judge=%d"),
+		LaneIndex, (Error + GetInputOffsetSec()) * 1000.0, Error * 1000.0, GetInputOffsetSec() * 1000.0, (int32)Judgement);
+
 	if (AHoldNoteActor* Hold = Cast<AHoldNoteActor>(Note))
 	{
 		// ホールドは始点の判定を出して、離すまで押し続けの状態にする
@@ -222,7 +235,7 @@ void ARhythmJudge::ReleaseLaneAt(int32 LaneIndex, double InputTime)
 
 	// 終点に届く時刻とのズレで判定する（押したときと同じ幅）。早すぎればミス
 	// 遅すぎる場合は離す前に Tick でミスになっている
-	const float Error = static_cast<float>(InputTime - Hold->GetEndTime());
+	const float Error = static_cast<float>((InputTime - GetInputOffsetSec()) - Hold->GetEndTime());
 	const ERhythmJudgement Judgement = CalcJudgement(FMath::Abs(Error));
 
 	ApplyJudgement(Hold, Judgement, (Judgement == ERhythmJudgement::Miss) ? 0.0f : Error, ENoteJudgePoint::HoldEnd);
