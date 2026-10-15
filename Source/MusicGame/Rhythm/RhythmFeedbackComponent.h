@@ -6,8 +6,8 @@
 // ・ホールドの終点（離したとき）: HoldCharge を止めて、判定ごとのエフェクト + HoldBurst（Good 以上）+ SE
 // ・空打ち（ノーツが無いところを押した）: EmptyPress エフェクト + EmptyPressSound
 //
-// エフェクトはデザイナーのアセットが初期値（左外側 = 赤白 / 左内側 = 赤暗 / 右内側 = 青暗 / 右外側 = 青白）。左外側は左右反転して外側へ出す。
-// SE は未設定。どちらもエディタで差し替えられる（空の欄は何も出さない）。
+// エフェクトはデザイナーのアセットが初期値（左外側 = 赤白 / 左内側 = 赤暗 / 右内側 = 青暗 / 右外側 = 青白）。向きは Yaw 180（Niagara のプレビューと同じ見た目）。内側2レーンは外側向きのアセット待ち。
+// SE はサウンド担当の SE（Sound_P/Sound_SE）が初期値。どちらもエディタで差し替えられる（空の欄は何も出さない）。
 
 #pragma once
 
@@ -79,9 +79,11 @@ struct FRhythmLaneEffects
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm")
 	TObjectPtr<UNiagaraSystem> EmptyPress = nullptr;
 
-	// このレーンのエフェクトを左右反転する（内側へ出るエフェクトを外側へ向けるときなど）
+	// このレーンのエフェクトの左右を逆にする（内側へ出るエフェクトを外側へ向けるときなど）。
+	// 裏返す（拡大率をマイナスにする）と板の表裏も入れ替わって見えなくなるので、
+	// カメラの方向を軸に 180 度回す。そのため上下も逆になる
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm")
-	bool bMirror = false;
+	bool bFlipSide = false;
 
 	// このレーンだけのずらし（EffectOffset に足す。NoteSpawner の向き基準、cm）
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm", meta=(Units="cm"))
@@ -108,6 +110,10 @@ struct FRhythmJudgementSounds
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm")
 	TObjectPtr<USoundBase> Miss = nullptr;
+
+	// 再生を始める位置（秒）。SE の頭に無音があると押してから遅れて聞こえるので、その分を飛ばす
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm", meta=(ClampMin=0.0, Units="s"))
+	float StartTime = 0.0f;
 
 	USoundBase* Get(ERhythmJudgement Judgement) const
 	{
@@ -145,6 +151,7 @@ public:
 
 protected:
 
+	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// ---------- エフェクト ----------
@@ -164,6 +171,11 @@ protected:
 	// エフェクトの大きさ
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Feedback|Effect")
 	FVector EffectScale = FVector::OneVector;
+
+	// 使い捨てのエフェクト（判定・burst・空打ち）を強制的に消すまでの時間（0 なら消さない）。
+	// アセットがループ設定のままでも、判定ラインに残り続けないようにする
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Feedback|Effect", meta=(ClampMin=0.0, Units="s"))
+	float EffectMaxLifetime = 2.0f;
 
 	// ---------- SE ----------
 
@@ -205,12 +217,15 @@ private:
 	void StopHold(int32 LaneIndex);
 
 	// レーン位置にエフェクトを出す（使い捨て）
-	UNiagaraComponent* SpawnEffect(UNiagaraSystem* System, int32 LaneIndex) const;
+	UNiagaraComponent* SpawnEffect(UNiagaraSystem* System, int32 LaneIndex);
 
-	void PlaySound(USoundBase* Sound) const;
+	// MaxLifetime 秒たったら消す（0 以下なら消さない）
+	UNiagaraComponent* SpawnEffect(UNiagaraSystem* System, int32 LaneIndex, float MaxLifetime);
+
+	void PlaySound(USoundBase* Sound, float StartTime = 0.0f) const;
 
 	// SE を鳴らす（SoundClass を反映）。止めたいとき用に AudioComponent を返す
-	UAudioComponent* StartSound(USoundBase* Sound) const;
+	UAudioComponent* StartSound(USoundBase* Sound, float StartTime = 0.0f) const;
 
 	// エフェクトを出す位置と向き
 	FTransform GetEffectTransform(int32 LaneIndex) const;
