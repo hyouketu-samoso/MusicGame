@@ -1,4 +1,3 @@
-```cpp
 #include "RhythmMusicPlayer.h"
 
 #include "Components/AudioComponent.h"
@@ -177,4 +176,3 @@ int32 ARhythmMusicPlayer::GetCurrentSongIndex() const
 {
     return CurrentSongIndex;
 }
-```
