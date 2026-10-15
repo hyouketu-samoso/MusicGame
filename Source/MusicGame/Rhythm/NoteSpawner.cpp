@@ -6,6 +6,7 @@
 #include "ChartImporter.h"
 #include "RhythmSettingsSubsystem.h"
 #include "RhythmGameSettings.h"
+#include "RhythmFeedbackComponent.h"
 #include "Engine/GameInstance.h"
 
 #include "Camera/CameraComponent.h"
@@ -63,6 +64,16 @@ ANoteSpawner::ANoteSpawner()
 
 
 	// ========================================================
+	// Feedback（判定エフェクト・SE）
+	// ========================================================
+
+	Feedback =
+		CreateDefaultSubobject<URhythmFeedbackComponent>(
+			TEXT("Feedback")
+		);
+
+
+	// ========================================================
 	// Camera
 	// ========================================================
 
@@ -112,13 +123,14 @@ ANoteSpawner::ANoteSpawner()
 	// プレイ画面UI（WBP_GameMain）の判定バー4本に重なる位置。内側のレーンほど手前。
 	// カメラが初期値（距離 700・高さ 400・角度 -15°・視野角 90°）のときに合わせた値なので、
 	// カメラを変えたらこちらも合わせ直す
+	// ※ 内側2レーンは判定エフェクトが重ならないよう、UI の判定バーより少し外側（±90 → ±130）に広げている
 	// ========================================================
 
 	LaneTargetOffsets =
 	{
 		FVector( -60.0f, -300.0f, 0.0f),
-		FVector(-205.0f,  -90.0f, 0.0f),
-		FVector(-205.0f,   90.0f, 0.0f),
+		FVector(-205.0f, -130.0f, 0.0f),
+		FVector(-205.0f,  130.0f, 0.0f),
 		FVector( -60.0f,  300.0f, 0.0f)
 	};
 }
@@ -169,6 +181,13 @@ void ANoteSpawner::BeginPlay()
 				"NoteSpawner: RhythmJudgeを自動生成しました"
 			)
 		);
+	}
+
+
+	// 判定が出たらエフェクト・SE を出す
+	if (Feedback && Judge)
+	{
+		Feedback->BindJudge(Judge);
 	}
 
 
