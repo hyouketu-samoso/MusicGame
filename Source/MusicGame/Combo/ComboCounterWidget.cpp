@@ -106,6 +106,7 @@ void UComboCounterWidget::ShowDigit(FComboDigitSlot& DigitSlot, int32 NewDigit, 
 		{
 			DigitSlot.OldImage->SetBrushFromTexture(OldTex);
 		}
+		DigitSlot.bHasOld = (OldTex != nullptr);
 		DigitSlot.OldImage->SetRenderOpacity(OldTex ? 1.0f : 0.0f);
 		DigitSlot.OldImage->SetRenderTranslation(FVector2D::ZeroVector);
 
@@ -130,6 +131,7 @@ void UComboCounterWidget::ShowDigit(FComboDigitSlot& DigitSlot, int32 NewDigit, 
 		DigitSlot.NewImage->SetRenderOpacity(1.0f);
 		DigitSlot.NewImage->SetRenderTranslation(FVector2D::ZeroVector);
 		DigitSlot.OldImage->SetRenderOpacity(0.0f);
+		DigitSlot.bHasOld = false;
 		DigitSlot.bAnimating = false;
 	}
 
@@ -203,8 +205,12 @@ void UComboCounterWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 		const float E = FMath::InterpEaseOut(0.0f, 1.0f, T, 2.0f);
 
 		// 古い数字: 上に流れながら、消える
-		DigitSlot.OldImage->SetRenderTranslation(FVector2D(0.0f, -Distance * E));
-		DigitSlot.OldImage->SetRenderOpacity(1.0f - E);
+		// (古い数字が無い新しい桁のときは、触らない。画像が無い Image は、白い四角に見えてしまう)
+		if (DigitSlot.bHasOld)
+		{
+			DigitSlot.OldImage->SetRenderTranslation(FVector2D(0.0f, -Distance * E));
+			DigitSlot.OldImage->SetRenderOpacity(1.0f - E);
+		}
 
 		// 新しい数字: 下から上がってきて、はっきり見える
 		DigitSlot.NewImage->SetRenderTranslation(FVector2D(0.0f, Distance * (1.0f - E)));
