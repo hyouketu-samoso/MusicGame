@@ -320,7 +320,7 @@ protected:
         EditAnywhere,
         Category = "Note Spawner|Chart"
     )
-    FString ChartFilePath = TEXT("Chart/Demo.json");
+    FString ChartFilePath = TEXT("Chart/AZURE_Easy.json");
 
 
     // チャートファイル（HARD）。空なら NORMAL と同じ譜面を使う
