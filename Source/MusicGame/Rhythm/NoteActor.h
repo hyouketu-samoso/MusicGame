@@ -34,6 +34,13 @@ public:
 	 */
 	void Launch(const FVector& InStartPos, const FVector& InTargetPos, float InArcHeight, float InTravelTime, const FLinearColor& InColor, int32 InLaneIndex);
 
+	// 判定地点に届いたときの向き（出現時の向きからのヨー回転、度）。Launch より前に呼ぶ。
+	// 出現したときは横向きで、判定地点に近づくにつれてこの角度まで回る
+	void SetArrivalYaw(float InYaw) { ArrivalYaw = InYaw; }
+
+	// ノーツの大きさ（倍率）。Launch より前に呼ぶ。遠くて小さく見えるレーンを大きくするのに使う
+	void SetNoteScale(float InScale) { NoteScale = FMath::Max(InScale, 0.01f); }
+
 	virtual void Tick(float DeltaTime) override;
 
 	// レーン番号
@@ -110,6 +117,9 @@ protected:
 	// 経過時間の割合 T（0〜）から位置を計算する
 	FVector CalcPosition(float T) const;
 
+	// 経過時間の割合 T（0〜）から向きを計算する（T = 0 で出現時の向き、T >= 1 で ArrivalYaw まで回った向き）
+	FQuat CalcRotation(float T) const;
+
 	// 見た目の準備：傾きをかけ、モデルがあればモデル、無ければ仮のプレートを表示する
 	void SetupVisual(USceneComponent* Pivot, UProceduralMeshComponent* InPlate, UStaticMeshComponent* InMesh) const;
 
@@ -120,6 +130,9 @@ protected:
 
 	int32 LaneIndex = 0;
 
+	// ノーツの大きさ（倍率）
+	float NoteScale = 1.0f;
+
 	bool bWaitForJudge = false;
 
 private:
@@ -127,6 +140,10 @@ private:
 	FVector StartPos = FVector::ZeroVector;
 	FVector TargetPos = FVector::ZeroVector;
 	float ArcHeight = 0.0f;
+
+	// 出現時の向きと、判定地点に届いたときのヨー回転（度）
+	FQuat StartRotation = FQuat::Identity;
+	float ArrivalYaw = 0.0f;
 
 	// 出現した時刻（ワールド時間)
 	double SpawnTime = 0.0;

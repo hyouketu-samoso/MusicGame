@@ -118,6 +118,20 @@ public:
     ) const;
 
 
+    // 指定レーンの判定地点でのノーツの向き（このActorの向きからのヨー回転、度）
+    UFUNCTION(BlueprintPure, Category = "Note Spawner")
+    float GetLaneTargetYaw(
+        int32 LaneIndex
+    ) const;
+
+
+    // 指定レーンのノーツ・判定枠の大きさ（倍率）
+    UFUNCTION(BlueprintPure, Category = "Note Spawner")
+    float GetLaneNoteScale(
+        int32 LaneIndex
+    ) const;
+
+
     // ========================================================
     // Camera
     // ========================================================
@@ -193,6 +207,34 @@ protected:
         Category = "Note Spawner|Lane"
     )
     TArray<FLinearColor> LaneColors;
+
+
+    // 判定枠（判定ラインの六角形）の色（要素番号 = レーン番号）。
+    // ノーツより鮮やかにしたいので別に持つ。要素が足りないレーンは LaneColors を使う
+    UPROPERTY(
+        EditAnywhere,
+        Category = "Note Spawner|Lane"
+    )
+    TArray<FLinearColor> JudgeLineColors;
+
+
+    // 判定地点でのノーツ・判定枠の向き（要素番号 = レーン番号、ヨー回転・度）。
+    // ノーツは出現時は横向きで、判定地点に近づくにつれてこの角度まで回る。
+    // 初期値は外側2レーンを V字のガイド線（外側 → 内側の判定地点を結ぶ線）に沿わせた角度
+    UPROPERTY(
+        EditAnywhere,
+        Category = "Note Spawner|Lane"
+    )
+    TArray<float> LaneTargetYaws;
+
+
+    // ノーツ・判定枠の大きさ（要素番号 = レーン番号、倍率）。
+    // 外側2レーンは奥にあり斜めなので小さく見える。画面上で内側2レーンと同じ大きさに見えるよう大きくする
+    UPROPERTY(
+        EditAnywhere,
+        Category = "Note Spawner|Lane"
+    )
+    TArray<float> LaneNoteScales;
 
 
     // 判定ラインにおける各レーンの位置（このActorからの相対位置、cm）

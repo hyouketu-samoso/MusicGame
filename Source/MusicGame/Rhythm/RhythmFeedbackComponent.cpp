@@ -71,6 +71,11 @@ URhythmFeedbackComponent::URhythmFeedbackComponent()
 	// ※ 内側2レーン（赤暗・青暗）はエフェクトが内側へ飛ぶ。bFlipSide では矢印が逆向きになるため使わず、
 	//    デザイナーに外側向きのアセットを依頼中（届いたら差し替える）
 
+	// 外側2レーンは判定枠が斜め（NoteSpawner の LaneTargetYaws = ±40 度）なので、エフェクトも画面上で傾ける。
+	// 判定枠は地面に寝ていてカメラから斜めに見下ろすため、画面上の傾きは 40 度より浅くなる（目安 25 度）
+	LaneEffects[0].ScreenTilt = -25.0f;  // 左外側：左が上がる「＼」
+	LaneEffects[3].ScreenTilt = 25.0f;   // 右外側：右が上がる「／」
+
 	// ---------- SE の Sound Class（ポーズ画面の SE 音量スライダーが効く） ----------
 	static ConstructorHelpers::FObjectFinder<USoundClass> SEClassFinder(TEXT("/Game/MusicGame/Sound_P/Sound_Goto/SCL_SE.SCL_SE"));
 	SoundClass = SEClassFinder.Object;
@@ -337,6 +342,9 @@ FTransform URhythmFeedbackComponent::GetEffectTransform(int32 LaneIndex) const
 	if (const FRhythmLaneEffects* Effects = FindLaneEffects(LaneIndex))
 	{
 		Offset += Effects->LaneOffset;
+
+		// 画面上の傾き：エフェクトの X 軸（カメラの方向）を軸に傾ける
+		Rotation = Rotation * FRotator(0.0f, 0.0f, Effects->ScreenTilt).Quaternion();
 
 		// 左右を逆にする：エフェクトの X 軸（カメラの方向）を軸に 180 度回す
 		if (Effects->bFlipSide)

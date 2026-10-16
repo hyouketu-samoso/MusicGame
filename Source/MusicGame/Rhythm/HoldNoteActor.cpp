@@ -11,10 +11,11 @@ namespace
 
 AHoldNoteActor::AHoldNoteActor()
 {
-	// 終点は始点とは別の位置に置くので、位置だけワールド基準にする（向きは Actor に合わせる）
+	// 終点は始点とは別の位置・向き（判定地点までの進み具合で回る量が違う）なので、ワールド基準にする
 	TailPivot = CreateDefaultSubobject<USceneComponent>(TEXT("TailPivot"));
 	TailPivot->SetupAttachment(RootComponent);
 	TailPivot->SetUsingAbsoluteLocation(true);
+	TailPivot->SetUsingAbsoluteRotation(true);
 
 	TailPlate = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("TailPlate"));
 	TailPlate->SetupAttachment(TailPivot);
@@ -67,8 +68,8 @@ void AHoldNoteActor::UpdateNote(float T)
 	// 終点は始点より HoldDuration 分だけ遅れて飛んでくる。出現前は出現地点で待つ
 	const float TailT = FMath::Clamp(T - HoldDuration / TravelTime, 0.0f, HeadT);
 
-	SetActorLocation(CalcPosition(HeadT));
-	TailPivot->SetWorldLocation(CalcPosition(TailT));
+	SetActorLocationAndRotation(CalcPosition(HeadT), CalcRotation(HeadT));
+	TailPivot->SetWorldLocationAndRotation(CalcPosition(TailT), CalcRotation(TailT));
 
 	UpdateBody(TailT, HeadT);
 
@@ -83,8 +84,9 @@ void AHoldNoteActor::UpdateBody(float TailT, float HeadT)
 {
 	// 帯は上面・裏面の両方から見えるように、表と裏で別々に頂点を持つ
 	const int32 PointNum = BodySegmentNum + 1;
-	const FVector Right = GetActorRightVector() * (PlateWidth * BodyWidthRatio * 0.5f);
-	const FVector Lift(0.0f, 0.0f, PlateThickness * 0.5f); // プレートの厚みの真ん中を通す
+	// 帯はワールド座標で作るので、ノーツの大きさ（倍率）をここでかける
+	const float HalfWidth = PlateWidth * BodyWidthRatio * 0.5f * NoteScale;
+	const FVector Lift(0.0f, 0.0f, PlateThickness * 0.5f * NoteScale); // プレートの厚みの真ん中を通す
 
 	TArray<FVector> Vertices;
 	TArray<FVector> Normals;
@@ -93,11 +95,16 @@ void AHoldNoteActor::UpdateBody(float TailT, float HeadT)
 	Normals.Reserve(PointNum * 4);
 	UVs.Reserve(PointNum * 4);
 
+	// 帯の中心線と横方向。横方向は各点の進み具合に合わせて回す（始点・終点の向きとつながる）
 	TArray<FVector> Centers;
+	TArray<FVector> Rights;
 	Centers.Reserve(PointNum);
+	Rights.Reserve(PointNum);
 	for (int32 i = 0; i < PointNum; ++i)
 	{
-		Centers.Add(CalcPosition(FMath::Lerp(TailT, HeadT, static_cast<float>(i) / BodySegmentNum)) + Lift);
+		const float PointT = FMath::Lerp(TailT, HeadT, static_cast<float>(i) / BodySegmentNum);
+		Centers.Add(CalcPosition(PointT) + Lift);
+		Rights.Add(CalcRotation(PointT).GetRightVector() * HalfWidth);
 	}
 
 	for (int32 Side = 0; Side < 2; ++Side)
@@ -105,6 +112,7 @@ void AHoldNoteActor::UpdateBody(float TailT, float HeadT)
 		for (int32 i = 0; i < PointNum; ++i)
 		{
 			// 曲線の進む向きとレーンの横方向から、帯の面の向き（上向き）を求める
+			const FVector& Right = Rights[i];
 			const FVector Along = Centers[FMath::Min(i + 1, PointNum - 1)] - Centers[FMath::Max(i - 1, 0)];
 			FVector Up = (Right ^ Along).GetSafeNormal();
 			if (Up.IsNearlyZero())

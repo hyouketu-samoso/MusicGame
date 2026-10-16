@@ -79,6 +79,8 @@ void ANoteActor::Launch(const FVector& InStartPos, const FVector& InTargetPos, f
 	ArcHeight = InArcHeight;
 	TravelTime = FMath::Max(InTravelTime, KINDA_SMALL_NUMBER);
 	SpawnTime = GetWorld()->GetTimeSeconds();
+	StartRotation = GetActorQuat();
+	SetActorScale3D(FVector(NoteScale));
 	bLaunched = true;
 
 	ApplyColor(InColor);
@@ -124,7 +126,7 @@ void ANoteActor::Tick(float DeltaTime)
 
 void ANoteActor::UpdateNote(float T)
 {
-	SetActorLocation(CalcPosition(T));
+	SetActorLocationAndRotation(CalcPosition(T), CalcRotation(T));
 
 	// 判定待ちの間は消さない（ミス判定が出る前に消えないように）
 	if (T >= DestroyProgress && !bWaitForJudge)
@@ -150,4 +152,11 @@ FVector ANoteActor::CalcPosition(float T) const
 	Pos.Z += ArcHeight * 4.0f * T * (1.0f - T);
 
 	return Pos;
+}
+
+FQuat ANoteActor::CalcRotation(float T) const
+{
+	// 出現時は横向き、判定地点で ArrivalYaw。途中はゆっくり回り始めてゆっくり合わせる
+	const float Alpha = FMath::SmoothStep(0.0f, 1.0f, FMath::Clamp(T, 0.0f, 1.0f));
+	return StartRotation * FRotator(0.0f, ArrivalYaw * Alpha, 0.0f).Quaternion();
 }

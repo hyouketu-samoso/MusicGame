@@ -85,6 +85,11 @@ struct FRhythmLaneEffects
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm")
 	bool bFlipSide = false;
 
+	// 画面上の傾き（度）。エフェクトはカメラの方を向いた板なので、カメラの方向を軸に傾けて
+	// 斜めの判定枠（NoteSpawner の LaneTargetYaws）と同じ向きに見せる。マイナスで左側が上がる
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm", meta=(Units="deg"))
+	float ScreenTilt = 0.0f;
+
 	// このレーンだけのずらし（EffectOffset に足す。NoteSpawner の向き基準、cm）
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm", meta=(Units="cm"))
 	FVector LaneOffset = FVector::ZeroVector;
