@@ -106,14 +106,28 @@ ANoteSpawner::ANoteSpawner()
 
 	// ========================================================
 	// 4 Lane Colors
+	//
+	// ノーツ仕様書「レーン・入力仕様」の固定仕様：左からピンク → 赤 → 青 → シアン。
+	// 通常ノーツ・ホールドノーツ・判定ラインはこの色を使う。
+	// 具体的な色味は仕様書で未確定のため仮の値（FColor は画面上の見た目の RGB）
 	// ========================================================
 
 	LaneColors =
 	{
-		FLinearColor(0.0f, 0.9f, 1.0f),
-		FLinearColor(0.1f, 0.3f, 1.0f),
-		FLinearColor(1.0f, 0.2f, 0.8f),
-		FLinearColor(1.0f, 0.85f, 0.1f)
+		FLinearColor(FColor(255, 105, 180)),  // レーン1 左外側：ピンク
+		FLinearColor(FColor(200,   0,   0)),  // レーン2 左内側：赤（濃いめ）
+		FLinearColor(FColor(  0,  30, 210)),  // レーン3 右内側：青（濃いめ）
+		FLinearColor(FColor(  0, 230, 255))   // レーン4 右外側：シアン
+	};
+
+
+	// 判定枠の色。ノーツの内側2色は濃くしてあるので、判定枠はくすまないよう鮮やかな赤・青にする
+	JudgeLineColors =
+	{
+		FLinearColor(FColor(255, 105, 180)),  // レーン1 左外側：ピンク
+		FLinearColor(FColor(255,   0,   0)),  // レーン2 左内側：赤
+		FLinearColor(FColor(  0,  70, 255)),  // レーン3 右内側：青
+		FLinearColor(FColor(  0, 230, 255))   // レーン4 右外側：シアン
 	};
 
 
@@ -123,15 +137,48 @@ ANoteSpawner::ANoteSpawner()
 	// プレイ画面UI（WBP_GameMain）の判定バー4本に重なる位置。内側のレーンほど手前。
 	// カメラが初期値（距離 700・高さ 400・角度 -15°・視野角 90°）のときに合わせた値なので、
 	// カメラを変えたらこちらも合わせ直す
-	// ※ 内側2レーンは判定エフェクトが重ならないよう、UI の判定バーより少し外側（±90 → ±130）に広げている
+	// ※ UI の判定バーからは広げている：内側2レーンは判定エフェクトが重ならないよう ±90 → ±130、
+	//    外側2レーンは内側との間をあけるため ±300 → ±370
 	// ========================================================
 
 	LaneTargetOffsets =
 	{
-		FVector( -60.0f, -300.0f, 0.0f),
+		FVector( -60.0f, -370.0f, 0.0f),
 		FVector(-205.0f, -130.0f, 0.0f),
 		FVector(-205.0f,  130.0f, 0.0f),
-		FVector( -60.0f,  300.0f, 0.0f)
+		FVector( -60.0f,  370.0f, 0.0f)
+	};
+
+
+	// ========================================================
+	// 4 Lane Target Yaws（判定地点での向き）
+	//
+	// 外側2レーンは斜め（V字のガイド線に沿う向き）、内側2レーンは横向き。
+	// 角度は見た目で決めた値（外側を ±370 に広げる前の V字のガイド線に沿う角度 約 40 度のまま）
+	// ========================================================
+
+	LaneTargetYaws =
+	{
+		40.0f,
+		0.0f,
+		0.0f,
+		-40.0f
+	};
+
+
+	// ========================================================
+	// 4 Lane Note Scales（ノーツ・判定枠の大きさ）
+	//
+	// 外側2レーンは内側より約 1.5m 奥にあり、斜めなので横幅も短く見える。
+	// カメラ初期値のとき画面上で内側2レーンと同じ大きさに見える倍率（計算上 約 1.5）
+	// ========================================================
+
+	LaneNoteScales =
+	{
+		1.5f,
+		1.0f,
+		1.0f,
+		1.5f
 	};
 }
 
@@ -1125,6 +1172,16 @@ void ANoteSpawner::SpawnNoteInternal(
 	// Launch
 	// ========================================================
 
+	// 判定地点に届くまでに、レーンごとの向きまで回る
+	Note->SetArrivalYaw(
+		GetLaneTargetYaw(LaneIndex)
+	);
+
+	// 遠くて小さく見えるレーンは大きくする
+	Note->SetNoteScale(
+		GetLaneNoteScale(LaneIndex)
+	);
+
 	Note->Launch(
 		StartPos,
 		GetLaneTarget(LaneIndex),
@@ -1200,6 +1257,34 @@ float ANoteSpawner::GetEffectiveTravelTime() const
 
 
 // ============================================================
+// Get Lane Target Yaw
+// ============================================================
+
+float ANoteSpawner::GetLaneTargetYaw(
+	int32 LaneIndex
+) const
+{
+	return LaneTargetYaws.IsValidIndex(LaneIndex)
+		? LaneTargetYaws[LaneIndex]
+		: 0.0f;
+}
+
+
+// ============================================================
+// Get Lane Note Scale
+// ============================================================
+
+float ANoteSpawner::GetLaneNoteScale(
+	int32 LaneIndex
+) const
+{
+	return LaneNoteScales.IsValidIndex(LaneIndex)
+		? FMath::Max(LaneNoteScales[LaneIndex], 0.01f)
+		: 1.0f;
+}
+
+
+// ============================================================
 // Get Lane Target
 // ============================================================
 
@@ -1260,15 +1345,18 @@ void ANoteSpawner::DrawJudgeLine() const
 	TArray<FVector> Outline;
 	NoteDefaults->GetPlateOutline(Outline);
 
-	const FQuat Rotation = GetActorQuat();
 	for (int32 Lane = 0; Lane < LaneNum; ++Lane)
 	{
+		// 判定枠もノーツが届いたときと同じ向きにする
+		const FQuat Rotation = GetActorQuat() * FRotator(0.0f, GetLaneTargetYaw(Lane), 0.0f).Quaternion();
 		const FVector Center = GetLaneTarget(Lane);
-		const FColor Color = LaneColors[Lane].ToFColor(true);
+		const FLinearColor& LineColor = JudgeLineColors.IsValidIndex(Lane) ? JudgeLineColors[Lane] : LaneColors[Lane];
+		const FColor Color = LineColor.ToFColor(true);
 		for (int32 i = 0; i < Outline.Num(); ++i)
 		{
-			const FVector P0 = Center + Rotation.RotateVector(Outline[i]);
-			const FVector P1 = Center + Rotation.RotateVector(Outline[(i + 1) % Outline.Num()]);
+			const float Scale = GetLaneNoteScale(Lane);
+			const FVector P0 = Center + Rotation.RotateVector(Outline[i] * Scale);
+			const FVector P1 = Center + Rotation.RotateVector(Outline[(i + 1) % Outline.Num()] * Scale);
 			DrawDebugLine(World, P0, P1, Color, false, -1.0f, 0, 3.0f);
 		}
 	}

@@ -39,7 +39,7 @@ protected:
 
 	virtual void ApplyColor(const FLinearColor& Color) override;
 
-	// 終点の位置（傾きは始点と同じ）。TailPlate と TailMesh はこの下に付く
+	// 終点の位置・向き（傾きは始点と同じ、向きは終点の進み具合で回る）。TailPlate と TailMesh はこの下に付く
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Hold Note")
 	TObjectPtr<USceneComponent> TailPivot;
 
