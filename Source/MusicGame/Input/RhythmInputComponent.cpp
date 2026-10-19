@@ -348,11 +348,20 @@ void URhythmInputComponent::ApplyVolumes()
 		return;
 	}
 
-	const float Master = MasterVolumeLevel / 10.0f;
+	// 指数を変えると、スライダーの効き方が変わる(1.0=直線、2.0=2乗)
+	const float VolumeCurveExponent = 1.5f;
+
+	auto ToGain = [VolumeCurveExponent](int32 Level)
+		{
+			const float Normalized = FMath::Clamp(Level / 100.0f, 0.0f, 1.0f);
+			return FMath::Pow(Normalized, VolumeCurveExponent);
+		};
+
+	const float Master = ToGain(MasterVolumeLevel);
 
 	UGameplayStatics::SetBaseSoundMix(this, SoundMix);
-	UGameplayStatics::SetSoundMixClassOverride(this, SoundMix, BGMClass, Master * (BGMVolumeLevel / 10.0f), 1.0f, 0.0f, true);
-	UGameplayStatics::SetSoundMixClassOverride(this, SoundMix, SEClass, Master * (SEVolumeLevel / 10.0f), 1.0f, 0.0f, true);
+	UGameplayStatics::SetSoundMixClassOverride(this, SoundMix, BGMClass, Master * ToGain(BGMVolumeLevel), 1.0f, 0.0f, true);
+	UGameplayStatics::SetSoundMixClassOverride(this, SoundMix, SEClass, Master * ToGain(SEVolumeLevel), 1.0f, 0.0f, true);
 }
 
 void URhythmInputComponent::SetMasterVolumeLevel(int32 Level)

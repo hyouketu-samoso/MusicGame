@@ -15,6 +15,7 @@ class UUserWidget;
 class ABackVideoActor;
 class USongSelectWidget;
 class UTimingAdjustWidget;
+class USoundBase;
 
 UCLASS()
 class MUSICGAME_API ARhythmPlayerController : public APlayerController
@@ -30,6 +31,10 @@ public:
 	// ポーズ画面のWidget(BPで WBP_PauseMenu を指定する)
 	UPROPERTY(EditAnyWhere, BluePrintReadOnly, Category = "Rhythm|Pause")
 	TSubclassOf<UUserWidget>PauseWidgetClass;
+
+	// ポーズ画面を開いたときのSE(BPで指定する)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rhythm|Pause|SE")
+	TObjectPtr<USoundBase> PauseOpenSE;
 
 	//　ポーズの開閉を切り替える
 	UFUNCTION(BluePrintCallable, Category = "Rhythm|Pause")

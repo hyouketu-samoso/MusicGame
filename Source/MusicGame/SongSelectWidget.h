@@ -11,9 +11,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "Input/MenuwidgetBase.h"
 #include "SongSelectWidget.generated.h"
 
+//#include "Blurprint/UserWidgeet.h
 class UButton;
 class UTextBlock;
 
@@ -32,7 +33,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameStartRequested);   // ゲームスタ�
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSongSelectClosed);     // フェードが終わって、ウィジェットが消えた後
 
 UCLASS()
-class MUSICGAME_API USongSelectWidget : public UUserWidget
+class MUSICGAME_API USongSelectWidget : public UMenuWidgetBase	// UUserWidget
 {
 	GENERATED_BODY()
 
@@ -72,9 +73,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "SongSelect")
 	void CloseWithFade();
 
+	void FocusDefaultButton();
+
+	// UIOnly の SetWidgetToFocus に渡す用(最初にフォーカスするボタン)
+	TSharedRef<SWidget> GetDefaultFocusWidget();
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual FReply NativeOnPreviewKeyDown(const FGeometry& InGeometry,
+		const FKeyEvent& InKeyEvent) override;
+	virtual FReply NativeOnPreviewMouseButtonDown(const FGeometry& InGeometry,
+		const FPointerEvent& InMouseEvent) override;
 
 	// ---- 演出の調整値 ----
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Fade")
@@ -83,12 +93,12 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Fade")
 	float ScaleUpAmount = 0.06f;        // 消えるときに、どれだけ拡大するか(0.06 = 6%)
 
-	// ---- 選択中の色 ----
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Color")
-	FLinearColor SelectedColor = FLinearColor(1.0f, 0.8f, 0.2f, 1.0f);
+	//// ---- 選択中の色 ----
+	//UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Color")
+	//FLinearColor SelectedColor = FLinearColor(1.0f, 0.8f, 0.2f, 1.0f);
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Color")
-	FLinearColor NormalColor = FLinearColor::White;
+	//UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Color")
+	//FLinearColor NormalColor = FLinearColor::White;
 
 	// ---- WBP側に、同じ名前の部品を置く(「変数である」にチェック) ----
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> SongTitleText;
@@ -107,6 +117,8 @@ protected:
 
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> TimingButton;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> StartButton;
+
+
 
 private:
 	// ボタンのクリック(AddDynamic には UFUNCTION が必要)

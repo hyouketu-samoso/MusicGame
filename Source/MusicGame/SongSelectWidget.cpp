@@ -60,8 +60,8 @@ void USongSelectWidget::NativeConstruct()
 		SetSelectedSpeed(3);
 	}
 
-	// パッドや矢印キーで操作できるように、最初のフォーカスをスタートに置く
-	StartButton->SetKeyboardFocus();
+	// パッドや矢印キーで操作できるように、最初のフォーカスを左上(前の曲)に置く
+	SongPrevButton->SetKeyboardFocus();
 }
 
 void USongSelectWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -99,20 +99,36 @@ void USongSelectWidget::SetSongInfo(const FText& Title, int32 NoteCount, float L
 	SongInfoText->SetText(FText::FromString(Info));
 }
 
+// 変更前
+
+//void USongSelectWidget::SetSelectedDifficulty(ESongDifficulty Difficulty)
+//{
+//	NormalButton->SetBackgroundColor(Difficulty == ESongDifficulty::Normal ? SelectedColor : NormalColor);
+//	HardButton->SetBackgroundColor(Difficulty == ESongDifficulty::Hard ? SelectedColor : NormalColor);
+//}
+
+//void USongSelectWidget::SetSelectedSpeed(int32 Speed)
+//{
+//	for (int32 i = 0; i < SpeedButtons.Num(); ++i)
+//	{
+//		if (SpeedButtons[i])
+//		{
+//			SpeedButtons[i]->SetBackgroundColor((i + 1) == Speed ? SelectedColor : NormalColor);
+//		}
+//	}
+//}
+
 void USongSelectWidget::SetSelectedDifficulty(ESongDifficulty Difficulty)
 {
-	NormalButton->SetBackgroundColor(Difficulty == ESongDifficulty::Normal ? SelectedColor : NormalColor);
-	HardButton->SetBackgroundColor(Difficulty == ESongDifficulty::Hard ? SelectedColor : NormalColor);
+	SetButtonToggledOn(NormalButton, Difficulty == ESongDifficulty::Normal);
+	SetButtonToggledOn(HardButton, Difficulty == ESongDifficulty::Hard);
 }
 
 void USongSelectWidget::SetSelectedSpeed(int32 Speed)
 {
 	for (int32 i = 0; i < SpeedButtons.Num(); ++i)
 	{
-		if (SpeedButtons[i])
-		{
-			SpeedButtons[i]->SetBackgroundColor((i + 1) == Speed ? SelectedColor : NormalColor);
-		}
+		SetButtonToggledOn(SpeedButtons[i], (i + 1) == Speed);
 	}
 }
 
@@ -191,4 +207,34 @@ void USongSelectWidget::HandleStart()
 
 	OnStartRequested.Broadcast();
 	CloseWithFade();
+}
+
+// フェード中にpadでも操作されないようにする
+FReply USongSelectWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry,
+	const FKeyEvent& InKeyEvent)
+{
+	// フェードアウト中は、パッド/キーボード操作を受け付けない
+	if (bClosing)
+	{
+		return FReply::Handled();
+	}
+	return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
+}
+
+
+TSharedRef<SWidget> USongSelectWidget::GetDefaultFocusWidget()
+{
+	return SongPrevButton->TakeWidget();   // StartButton → SongPrevButton
+}
+
+void USongSelectWidget::FocusDefaultButton()
+{
+	SongPrevButton->SetKeyboardFocus();    // StartButton → SongPrevButton
+}
+
+FReply USongSelectWidget::NativeOnPreviewMouseButtonDown(const FGeometry& InGeometry,
+	const FPointerEvent& InMouseEvent)
+{
+	// マウスクリックは無視する(フォーカスが外れないように)
+	return FReply::Handled();
 }
