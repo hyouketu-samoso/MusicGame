@@ -7,6 +7,8 @@
 #include "SongSelectWidget.h"
 #include "TimingAdjustWidget.h"
 #include "HAL/PlatformTime.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 
 ARhythmPlayerController::ARhythmPlayerController()
 {
@@ -50,9 +52,10 @@ void ARhythmPlayerController::BeginPlay()
 			SongSelectWidget->AddToViewport(100);
 
 			FInputModeUIOnly Mode;
-			Mode.SetWidgetToFocus(SongSelectWidget->TakeWidget());
+			Mode.SetWidgetToFocus(SongSelectWidget->GetDefaultFocusWidget());
 			SetInputMode(Mode);
-			bShowMouseCursor = true;
+			SongSelectWidget->FocusDefaultButton();
+			bShowMouseCursor = false;
 
 			// 曲を選択しているときは時間を止める
 			SetPause(true);
@@ -106,8 +109,9 @@ void ARhythmPlayerController::HandleTimingAdjustClosed()
 	SongSelectWidget->SetVisibility(ESlateVisibility::Visible);
 
 	FInputModeUIOnly Mode;
-	Mode.SetWidgetToFocus(SongSelectWidget->TakeWidget());
+	Mode.SetWidgetToFocus(SongSelectWidget->GetDefaultFocusWidget());
 	SetInputMode(Mode);
+	SongSelectWidget->FocusDefaultButton();
 }
 
 void ARhythmPlayerController::HandlePauseInput()
@@ -152,6 +156,12 @@ void ARhythmPlayerController::OpenPause()
 	if (PauseWidget)
 	{
 		PauseWidget->AddToViewport(100);
+
+		// ポーズを開いたSE(UIサウンドなのでポーズ中も鳴る)
+		if (PauseOpenSE)
+		{
+			UGameplayStatics::PlaySound2D(this, PauseOpenSE);
+		}
 	}
 	else
 	{
