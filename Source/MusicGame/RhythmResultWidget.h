@@ -11,6 +11,8 @@
 //          同じレベルの中で曲選択を出すときは、OnTitleRequested / OnClosed に繋ぐ)
 //  演出 : 表示するときにフェードイン、ボタンを押すとフェードアウトして消える
 //  時間 : 表示している間はゲームを止める(ポーズ)。消えるときに解除する
+//  素材 : ランク / ALL PERFECT・FULL COMBO / NEW RECORD は、画像でも表示できる
+//         (画像の部品と画像が両方そろっていれば画像、そろっていなければ、いままでの文字を出す)
 //  操作 : マウス・キーボード・ゲームパッドで、リトライ / タイトルを選べる
 //         (十字キー・左スティックで移動、○ボタン(Xbox の B)で決定。×ボタンでは決定しない)
 // ============================================================
@@ -23,6 +25,9 @@
 
 class UButton;
 class UTextBlock;
+class UImage;
+class UHorizontalBox;
+class UTexture2D;
 
 UENUM(BlueprintType)
 enum class ERhythmRank : uint8
@@ -42,6 +47,8 @@ struct FRhythmResultData
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FText SongTitle;
+	// 曲名の画像(曲ごとに用意する。未設定なら、曲名の文字を出す)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) TObjectPtr<UTexture2D> SongTitleTexture = nullptr;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) ESongDifficulty Difficulty = ESongDifficulty::Normal;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) ERhythmRank Rank = ERhythmRank::D;
@@ -134,24 +141,103 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Focus")
 	FLinearColor NormalColor = FLinearColor::White;   // 選んでいないボタンの色
 
-	// ---- WBP側に、同じ名前の部品を置く(「変数である」にチェック) ----
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> SongTitleText;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> DifficultyText;
+	// ---- ランクの決め方 ----
+	// true のとき、渡された Rank は使わずに、スコア(0.00 から 100.00)から、ランクを決める
+	// false のとき、ゲーム側が渡した Rank をそのまま使う
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Rank")
+	bool bAutoRankFromScore = true;
 
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> RankText;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> ScoreIntText;       // 「100」
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> ScoreDecimalText;   // 「.00」
+	// 各ランクになる、スコアの下限(例: SS は 95.00 以上)。これ未満はすべて D
+	// 値を変えるときは、SS > S > A > B > C の順に、小さくなるようにする
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Rank", meta = (ClampMin = "0.0", ClampMax = "100.0"))
+	float RankThresholdSS = 95.0f;
 
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> MaxComboText;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> PerfectCountText;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> GreatCountText;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> GoodCountText;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> BadCountText;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> MissCountText;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Rank", meta = (ClampMin = "0.0", ClampMax = "100.0"))
+	float RankThresholdS = 90.0f;
 
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> ClearBadgeText;   // ALL PERFECT / FULL COMBO
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> NewRecordText;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> FastLateText;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Rank", meta = (ClampMin = "0.0", ClampMax = "100.0"))
+	float RankThresholdA = 80.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Rank", meta = (ClampMin = "0.0", ClampMax = "100.0"))
+	float RankThresholdB = 70.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Rank", meta = (ClampMin = "0.0", ClampMax = "100.0"))
+	float RankThresholdC = 60.0f;
+
+	// ---- 画像の素材(WBP のクラスデフォルトで設定する。デザイナーの素材が来たら、差し替える) ----
+	// 未設定のものは、画像を出さずに、文字を出す
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Images")
+	TMap<ERhythmRank, TObjectPtr<UTexture2D>> RankTextures;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Images")
+	TObjectPtr<UTexture2D> AllPerfectTexture;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Images")
+	TObjectPtr<UTexture2D> FullComboTexture;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Images")
+	TObjectPtr<UTexture2D> NewRecordTexture;
+
+	// ---- 画像を出す部品(WBP に Image を置いて、同じ名前にする。無くても動く) ----
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> RankImage;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> ClearBadgeImage;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> NewRecordImage;
+
+	// ---- 数字の画像(0 から 9 の10枚と、小数点)----
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Numbers")
+	TArray<TObjectPtr<UTexture2D>> DigitTextures;   // 0 から 9 の順に10枚
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Numbers")
+	TObjectPtr<UTexture2D> DotTexture;
+
+	// 数字1つの大きさ(スコア / ほかの数字)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Numbers")
+	FVector2D ScoreDigitSize = FVector2D(64.0, 96.0);
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Numbers")
+	FVector2D DecimalDigitSize = FVector2D(40.0, 60.0);
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Numbers")
+	FVector2D SmallDigitSize = FVector2D(32.0, 48.0);
+
+	// 難易度の画像
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Images")
+	TObjectPtr<UTexture2D> NormalDifficultyTexture;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Images")
+	TObjectPtr<UTexture2D> HardDifficultyTexture;
+
+	// ---- 数字を並べる入れ物(WBP に Horizontal Box を置いて、同じ名前にする。無くても動く)----
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UHorizontalBox> ScoreIntBox;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UHorizontalBox> ScoreDecimalBox;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UHorizontalBox> MaxComboBox;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UHorizontalBox> PerfectBox;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UHorizontalBox> GreatBox;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UHorizontalBox> GoodBox;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UHorizontalBox> BadBox;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UHorizontalBox> MissBox;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UHorizontalBox> FastBox;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UHorizontalBox> LateBox;
+
+	// ---- 画像を出す部品(曲名・難易度)----
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> SongTitleImage;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> DifficultyImage;
+
+	// ---- 文字の部品(もう使わないなら、WBP から消してよい。画像が出せないときの代わりに出る)----
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> SongTitleText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> DifficultyText;
+
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> RankText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> ScoreIntText;       // 「100」
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> ScoreDecimalText;   // 「.00」
+
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> MaxComboText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> PerfectCountText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> GreatCountText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> GoodCountText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> BadCountText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> MissCountText;
+
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> ClearBadgeText;   // ALL PERFECT / FULL COMBO
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> NewRecordText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> FastLateText;
 
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> RetryButton;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> TitleButton;
@@ -169,6 +255,17 @@ private:
 
 	// フェードアウトが終わったあとに、押されたボタンに合わせてレベルを移動する
 	void ExecutePendingAction();
+
+	// スコア(0.00 から 100.00)から、ランクを決める
+	ERhythmRank ScoreToRank(float Score) const;
+
+	// 画像と文字の切り替え
+	//  bShow が false: 両方隠す / 画像の部品と画像がある: 画像を出して文字を隠す / ない: 文字を出す
+	void ShowImageOrText(UImage* Image, UTexture2D* Texture, UTextBlock* Text, bool bShow);
+
+	// 数字の文字列(例: "0123"、".45")を、数字の画像で並べる
+	//  画像が出せたら true(Text は隠す)/ 出せないとき(入れ物か画像が無い)は false(Text に Fallback を出す)
+	bool ShowNumber(UHorizontalBox* Box, UTextBlock* Text, const FString& Digits, const FVector2D& Size, const FString& FallbackText);
 
 	// ゲームパッド操作の準備(UI 操作に切り替えて、リトライにフォーカスを置く)
 	void SetupGamepadFocus();

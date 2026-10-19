@@ -11,6 +11,10 @@
 // ============================================================
 #include "RhythmResultWidget.h"
 #include "Components/Button.h"        // UButton を使うために必要
+#include "Components/HorizontalBox.h"   // 数字を並べる入れ物
+#include "Blueprint/WidgetTree.h"        // 数字の画像をその場で作るのに必要
+#include "Components/Image.h"         // UImage を使うために必要
+#include "Engine/Texture2D.h"          // UTexture2D を使うために必要
 #include "Components/TextBlock.h"     // UTextBlock を使うために必要
 #include "Kismet/GameplayStatics.h"  // SetGamePaused を使うために必要
 #include "GameFramework/PlayerController.h"   // 入力モードの切り替え(FInputModeUIOnly)に必要
@@ -35,22 +39,15 @@ namespace
 		}
 	}
 
-	// 判定の数を「:0012」のように4桁ゼロ埋めの文字にする
-	// マイナスの値が来ても 0 として扱う
-	FText Count4(int32 Value)
-	{
-		return FText::FromString(FString::Printf(TEXT(":%04d"), FMath::Max(0, Value)));
-	}
 }
 
 // WBP側に必要な部品が全部あるかを調べる
 // 1つでも無い(NULL)と、使った瞬間にクラッシュするので、その前にここで止める
 bool URhythmResultWidget::HasAllParts() const
 {
-	return SongTitleText && DifficultyText && RankText && ScoreIntText && ScoreDecimalText
-		&& MaxComboText && PerfectCountText && GreatCountText && GoodCountText
-		&& BadCountText && MissCountText && ClearBadgeText && NewRecordText
-		&& FastLateText && RetryButton && TitleButton;
+	// 文字や画像の部品は、無くても動く(画像だけにして、文字を消してもよい)
+	// 必ず要るのは、ボタンだけ
+	return RetryButton && TitleButton;
 }
 
 // ウィジェットが作られて、画面に出る準備ができたときに1回だけ呼ばれる
@@ -105,6 +102,42 @@ void URhythmResultWidget::ReleasePause()
 		UGameplayStatics::SetGamePaused(this, false);
 	}
 	bPausedByThis = false;
+}
+
+// スコアからランクを決める(下限以上で、一番上のランクになる)
+ERhythmRank URhythmResultWidget::ScoreToRank(float Score) const
+{
+	const float S = FMath::Clamp(Score, 0.0f, 100.0f);
+	if (S >= RankThresholdSS) { return ERhythmRank::SS; }
+	if (S >= RankThresholdS) { return ERhythmRank::S; }
+	if (S >= RankThresholdA) { return ERhythmRank::A; }
+	if (S >= RankThresholdB) { return ERhythmRank::B; }
+	if (S >= RankThresholdC) { return ERhythmRank::C; }
+	return ERhythmRank::D;
+}
+
+// 画像と文字の切り替え(デザイナーの素材が来る前は文字、来たあとは画像、をコード変更なしで切り替えられる)
+void URhythmResultWidget::ShowImageOrText(UImage* Image, UTexture2D* Texture, UTextBlock* Text, bool bShow)
+{
+	if (!bShow)
+	{
+		if (Image) { Image->SetVisibility(ESlateVisibility::Collapsed); }
+		if (Text) { Text->SetVisibility(ESlateVisibility::Collapsed); }
+		return;
+	}
+
+	if (Image && Texture)
+	{
+		// bMatchSize を false にして、WBP で決めた大きさのまま、画像だけ差し替える
+		Image->SetBrushFromTexture(Texture, false);
+		Image->SetVisibility(ESlateVisibility::HitTestInvisible);
+		if (Text) { Text->SetVisibility(ESlateVisibility::Collapsed); }
+	}
+	else
+	{
+		if (Image) { Image->SetVisibility(ESlateVisibility::Collapsed); }
+		if (Text) { Text->SetVisibility(ESlateVisibility::HitTestInvisible); }
+	}
 }
 
 // ゲームパッド操作の準備
@@ -243,70 +276,169 @@ void URhythmResultWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 	}
 }
 
-// 受け取ったデータを、画面の文字に反映する(画面に出す前に呼ぶ)
+// 受け取ったデータを、画面に反映する(画面に出す前に呼ぶ)
+//  画像が出せるものは画像で、出せないものは(あれば)文字で出す
 void URhythmResultWidget::SetResult(const FRhythmResultData& Data)
 {
-	// 部品が無いときは何もしない(NativeConstruct と同じ理由)
+	// ボタンが無いときは何もしない(NativeConstruct と同じ理由)
 	if (!HasAllParts())
 	{
 		return;
 	}
 
 	// ---- 曲名・難易度 ----
-	SongTitleText->SetText(Data.SongTitle);
-	DifficultyText->SetText(Data.Difficulty == ESongDifficulty::Hard
-		? FText::FromString(TEXT("Hard"))
-		: FText::FromString(TEXT("Normal")));
+	if (SongTitleText)
+	{
+		SongTitleText->SetText(Data.SongTitle);
+	}
+	ShowImageOrText(SongTitleImage, Data.SongTitleTexture, SongTitleText, true);
 
-	// ---- ランク ----
-	RankText->SetText(FText::FromString(RankToString(Data.Rank)));
+	const bool bHard = (Data.Difficulty == ESongDifficulty::Hard);
+	if (DifficultyText)
+	{
+		DifficultyText->SetText(bHard ? FText::FromString(TEXT("Hard")) : FText::FromString(TEXT("Normal")));
+	}
+	ShowImageOrText(DifficultyImage, bHard ? HardDifficultyTexture.Get() : NormalDifficultyTexture.Get(), DifficultyText, true);
 
 	// ---- スコア ----
-	// 「100」と「.00」を別々の文字にして、小数部を小さく見せられるようにする
 	// 小数の誤差を避けるため、100倍して整数(例: 100.00 は 10000)にしてから分ける
 	const float Score = FMath::Clamp(Data.Score, 0.0f, 100.0f);
 	const int32 Hundredths = FMath::RoundToInt(Score * 100.0f);
-	ScoreIntText->SetText(FText::FromString(FString::Printf(TEXT("%d"), Hundredths / 100)));        // 整数部
-	ScoreDecimalText->SetText(FText::FromString(FString::Printf(TEXT(".%02d"), Hundredths % 100))); // 小数部
+	ShowNumber(ScoreIntBox, ScoreIntText, FString::Printf(TEXT("%d"), Hundredths / 100), ScoreDigitSize,
+		FString::Printf(TEXT("%d"), Hundredths / 100));
+	ShowNumber(ScoreDecimalBox, ScoreDecimalText, FString::Printf(TEXT(".%02d"), Hundredths % 100), DecimalDigitSize,
+		FString::Printf(TEXT(".%02d"), Hundredths % 100));
 
-	// ---- 最大コンボと、各判定の数 ----
-	MaxComboText->SetText(FText::FromString(
-		FString::Printf(TEXT("MAX COMBO :%04d"), FMath::Max(0, Data.MaxCombo))));
+	// ---- ランク(スコアから決める / Data.Rank をそのまま使う)----
+	const ERhythmRank Rank = bAutoRankFromScore ? ScoreToRank(Score) : Data.Rank;
+	if (RankText)
+	{
+		RankText->SetText(FText::FromString(RankToString(Rank)));
+	}
+	UTexture2D* RankTexture = nullptr;
+	if (const TObjectPtr<UTexture2D>* Found = RankTextures.Find(Rank))
+	{
+		RankTexture = Found->Get();
+	}
+	ShowImageOrText(RankImage, RankTexture, RankText, true);
 
-	PerfectCountText->SetText(Count4(Data.PerfectCount));
-	GreatCountText->SetText(Count4(Data.GreatCount));
-	GoodCountText->SetText(Count4(Data.GoodCount));
-	BadCountText->SetText(Count4(Data.BadCount));
-	MissCountText->SetText(Count4(Data.MissCount));
+	// ---- 最大コンボと、各判定の数(マイナスの値が来ても 0 として扱う)----
+	const FString MaxComboStr = FString::Printf(TEXT("%04d"), FMath::Max(0, Data.MaxCombo));
+	ShowNumber(MaxComboBox, MaxComboText, MaxComboStr, SmallDigitSize, FString::Printf(TEXT("MAX COMBO :%s"), *MaxComboStr));
+
+	auto ShowCount = [this](UHorizontalBox* Box, UTextBlock* Text, int32 Value)
+		{
+			const FString S = FString::Printf(TEXT("%04d"), FMath::Max(0, Value));
+			ShowNumber(Box, Text, S, SmallDigitSize, FString::Printf(TEXT(":%s"), *S));
+		};
+	ShowCount(PerfectBox, PerfectCountText, Data.PerfectCount);
+	ShowCount(GreatBox, GreatCountText, Data.GreatCount);
+	ShowCount(GoodBox, GoodCountText, Data.GoodCount);
+	ShowCount(BadBox, BadCountText, Data.BadCount);
+	ShowCount(MissBox, MissCountText, Data.MissCount);
 
 	// ---- ALL PERFECT / FULL COMBO ----
 	// 両方 true のときは ALL PERFECT を優先して、どちらか一方だけ出す
 	// どちらでもないときは、場所を取らないように Collapsed(非表示)にする
 	if (Data.bAllPerfect)
 	{
-		ClearBadgeText->SetText(FText::FromString(TEXT("ALL PERFECT")));
-		ClearBadgeText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		if (ClearBadgeText) { ClearBadgeText->SetText(FText::FromString(TEXT("ALL PERFECT"))); }
+		ShowImageOrText(ClearBadgeImage, AllPerfectTexture, ClearBadgeText, true);
 	}
 	else if (Data.bFullCombo)
 	{
-		ClearBadgeText->SetText(FText::FromString(TEXT("FULL COMBO")));
-		ClearBadgeText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		if (ClearBadgeText) { ClearBadgeText->SetText(FText::FromString(TEXT("FULL COMBO"))); }
+		ShowImageOrText(ClearBadgeImage, FullComboTexture, ClearBadgeText, true);
 	}
 	else
 	{
-		ClearBadgeText->SetVisibility(ESlateVisibility::Collapsed);
+		ShowImageOrText(ClearBadgeImage, nullptr, ClearBadgeText, false);
 	}
 
 	// ---- NEW RECORD(記録を更新したときだけ表示)----
-	NewRecordText->SetText(FText::FromString(TEXT("NEW RECORD")));
-	NewRecordText->SetVisibility(Data.bNewRecord
-		? ESlateVisibility::HitTestInvisible
-		: ESlateVisibility::Collapsed);
+	if (NewRecordText)
+	{
+		NewRecordText->SetText(FText::FromString(TEXT("NEW RECORD")));
+	}
+	ShowImageOrText(NewRecordImage, NewRecordTexture, NewRecordText, Data.bNewRecord);
 
 	// ---- FAST / LATE(判定より早かった回数 / 遅かった回数)----
-	FastLateText->SetText(FText::FromString(
-		FString::Printf(TEXT("FAST %d  /  LATE %d"),
-			FMath::Max(0, Data.FastCount), FMath::Max(0, Data.LateCount))));
+	// 数字の画像が両方出せたら、まとめの文字は隠す。出せなければ、まとめの文字を出す
+	const int32 Fast = FMath::Max(0, Data.FastCount);
+	const int32 Late = FMath::Max(0, Data.LateCount);
+	const bool bFastImg = ShowNumber(FastBox, nullptr, FString::Printf(TEXT("%d"), Fast), SmallDigitSize, FString());
+	const bool bLateImg = ShowNumber(LateBox, nullptr, FString::Printf(TEXT("%d"), Late), SmallDigitSize, FString());
+	if (FastLateText)
+	{
+		if (bFastImg && bLateImg)
+		{
+			FastLateText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		else
+		{
+			FastLateText->SetText(FText::FromString(FString::Printf(TEXT("FAST %d  /  LATE %d"), Fast, Late)));
+			FastLateText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+	}
+}
+
+// 数字の文字列を、数字の画像で並べる
+bool URhythmResultWidget::ShowNumber(UHorizontalBox* Box, UTextBlock* Text, const FString& Digits,
+	const FVector2D& Size, const FString& FallbackText)
+{
+	// 文字ごとの画像を集める(1つでも足りなければ、画像では出さない)
+	TArray<UTexture2D*> Textures;
+	bool bReady = (Box != nullptr);
+	if (bReady)
+	{
+		for (const TCHAR Ch : Digits)
+		{
+			UTexture2D* Tex = nullptr;
+			if (Ch >= TEXT('0') && Ch <= TEXT('9'))
+			{
+				const int32 Index = Ch - TEXT('0');
+				if (DigitTextures.IsValidIndex(Index)) { Tex = DigitTextures[Index]; }
+			}
+			else if (Ch == TEXT('.'))
+			{
+				Tex = DotTexture;
+			}
+
+			if (!Tex)
+			{
+				bReady = false;
+				break;
+			}
+			Textures.Add(Tex);
+		}
+	}
+
+	if (!bReady)
+	{
+		// 画像で出せないとき: 入れ物は隠して、文字(あれば)を出す
+		if (Box) { Box->SetVisibility(ESlateVisibility::Collapsed); }
+		if (Text)
+		{
+			Text->SetText(FText::FromString(FallbackText));
+			Text->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		return false;
+	}
+
+	// 並べ直す(前の数字を消してから、新しく作る)
+	Box->ClearChildren();
+	for (int32 i = 0; i < Textures.Num(); ++i)
+	{
+		UImage* DigitImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+		DigitImage->SetBrushFromTexture(Textures[i], false);
+		// 小数点は、数字の半分の幅にする
+		const bool bDot = (Digits[i] == TEXT('.'));
+		DigitImage->SetDesiredSizeOverride(bDot ? FVector2D(Size.X * 0.5, Size.Y) : Size);
+		Box->AddChildToHorizontalBox(DigitImage);
+	}
+	Box->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (Text) { Text->SetVisibility(ESlateVisibility::Collapsed); }
+	return true;
 }
 
 // フェードアウトを始める。終わると自動で画面から消える
