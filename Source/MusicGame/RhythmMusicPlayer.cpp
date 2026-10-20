@@ -73,6 +73,31 @@ void ARhythmMusicPlayer::PlaySongByIndex(int32 Index)
     PlayMusic();
 }
 
+void ARhythmMusicPlayer::SelectSongByIndex(int32 Index)
+{
+    if (!Songs.IsValidIndex(Index) || !Songs[Index])
+    {
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT("[MusicPlayer] Invalid song index: %d"),
+            Index
+        );
+        return;
+    }
+
+    CurrentSongIndex = Index;
+    CurrentSongData = Songs[Index];
+
+    UE_LOG(
+        LogTemp,
+        Warning,
+        TEXT("[MusicPlayer] Selected: Index=%d, Title=%s"),
+        CurrentSongIndex,
+        *CurrentSongData->SongTitle.ToString()
+    );
+}
+
 void ARhythmMusicPlayer::PlayMusic()
 {
     if (!AudioComponent || !CurrentSongData)
@@ -157,7 +182,7 @@ void ARhythmMusicPlayer::HandleSongChangeRequested(int32 Direction)
     const int32 NextIndex =
         (CurrentSongIndex + Direction + SongCount) % SongCount;
 
-    PlaySongByIndex(NextIndex);
+  SelectSongByIndex(NextIndex);
 }
 
 int32 ARhythmMusicPlayer::GetSongCount() const

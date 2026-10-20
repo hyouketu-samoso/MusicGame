@@ -19,7 +19,11 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Song")
     TObjectPtr<USoundBase> MusicSound;
 
-    // 譜面JSONのパス（Contentフォルダからの相対パス）
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Song")
-    FString ChartFilePath;
+    // NORMAL 譜面の JSON パス
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Song|Chart")
+    FString NormalChartFilePath;
+
+    // HARD 譜面の JSON パス
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Song|Chart")
+    FString HardChartFilePath;
 };

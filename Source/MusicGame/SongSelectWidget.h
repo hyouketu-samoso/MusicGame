@@ -62,6 +62,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "SongSelect")
 	void SetSongInfo(const FText& Title, int32 NoteCount, float LengthSeconds);
 
+	UFUNCTION(BlueprintCallable, Category = "SongSelect")
+	void SetSongTitle(const FText& Title);
+
 	// 選択中の見た目だけを変える(通知は飛ばさない)
 	UFUNCTION(BlueprintCallable, Category = "SongSelect")
 	void SetSelectedDifficulty(ESongDifficulty Difficulty);
