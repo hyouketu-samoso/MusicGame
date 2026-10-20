@@ -2,12 +2,34 @@
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
+#include "Components/AudioComponent.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/PlatformTime.h"
 #include "InputCoreTypes.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
+#include "Sound/SoundClass.h"
+#include "UObject/ConstructorHelpers.h"
 #include "Rhythm/RhythmSettingsSubsystem.h"
 #include "Input/RhythmInputComponent.h"
+
+// ============================================================
+// 生成・初期化
+// ============================================================
+
+UTimingAdjustWidget::UTimingAdjustWidget(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	// 本編（RhythmFeedbackComponent）と同じ SE / Sound Class を初期値にする
+	static ConstructorHelpers::FObjectFinder<USoundBase> PerfectFinder(
+		TEXT("/Game/MusicGame/Sound_P/Sound_SE/SE_Notes_Perfect.SE_Notes_Perfect"));
+	PerfectSE = PerfectFinder.Object;
+
+	static ConstructorHelpers::FObjectFinder<USoundClass> SEClassFinder(
+		TEXT("/Game/MusicGame/Sound_P/Sound_Goto/SCL_SE.SCL_SE"));
+	SESoundClass = SEClassFinder.Object;
+}
 
 URhythmSettingsSubsystem* UTimingAdjustWidget::GetRhythmSettings() const
 {
@@ -21,7 +43,7 @@ void UTimingAdjustWidget::NativeConstruct()
 
 	BackButton->OnClicked.AddDynamic(this, &UTimingAdjustWidget::HandleBack);
 
-	// 入力コンポーネントがあれば、スティックのしきい値を合わせる
+	// 入力コンポーネントがあれば、スティックのしきい値を本編に合わせる
 	if (const APlayerController* PC = GetOwningPlayer())
 	{
 		if (const URhythmInputComponent* RhythmInput = PC->FindComponentByClass<URhythmInputComponent>())
@@ -31,13 +53,46 @@ void UTimingAdjustWidget::NativeConstruct()
 		}
 	}
 
+	// 曲選択のノーツ速度（到達時間）をそのまま使う
+	if (bUseNoteSpeedSetting)
+	{
+		if (const URhythmSettingsSubsystem* Settings = GetRhythmSettings())
+		{
+			NoteTravelSec = Settings->GetNoteArrivalTime();
+		}
+	}
+
+	// 拍の間隔が到達時間より短いと、ノーツが途中から急に現れるので伸ばす
+	if (bExtendBeatToTravel)
+	{
+		BeatIntervalSec = FMath::Max(BeatIntervalSec, NoteTravelSec);
+	}
+
 	// 開いてから1拍待って、最初のノーツを流す
 	StartTime = FPlatformTime::Seconds() + BeatIntervalSec;
 
+	// 状態を初期化
 	Samples.Reset();
 	bLeftArmed = true;
 	bRightArmed = true;
 	bClosed = false;
+	ConsumedBeatIndex = -1;
+
+	// エフェクト画像は最初は見えなくしておく
+	for (int32 Lane = 0; Lane < 4; ++Lane)
+	{
+		EffectStartTimes[Lane] = -1.0;
+		if (UImage* Img = GetEffectImage(Lane))
+		{
+			Img->SetRenderOpacity(0.0f);
+		}
+	}
+
+	// 初回の読み込み待ちでSEが遅れないように先に読み込む
+	if (PerfectSE)
+	{
+		UGameplayStatics::PrimeSound(PerfectSE);
+	}
 
 	if (LastErrorText)
 	{
@@ -48,12 +103,18 @@ void UTimingAdjustWidget::NativeConstruct()
 	BackButton->SetKeyboardFocus();
 }
 
+// ============================================================
+// 毎フレームの更新
+// ============================================================
+
 void UTimingAdjustWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 
 	// ゲームが止まっていてもウィジェットは動く。時刻は実時間で測る
-	UpdateNoteVisual(FPlatformTime::Seconds());
+	const double Now = FPlatformTime::Seconds();
+	UpdateNoteVisual(Now);
+	UpdateEffects(Now);
 
 	// フォーカス中は色を変えて、選ばれていることが分かるようにする
 	BackButton->SetBackgroundColor(BackButton->HasKeyboardFocus() ? SelectedColor : NormalColor);
@@ -77,45 +138,85 @@ void UTimingAdjustWidget::UpdateNoteVisual(double Now)
 
 	// 通り過ぎた直後は、そのノーツを少しの間見せる
 	const bool bShowPast = (K >= 0) && ((Now - PastBeat) < PassVisibleSec);
-	const double HitTime = bShowPast ? PastBeat : NextBeat;
 
-	// 0 = 出現位置 / 1 = 判定ライン / 1超 = 通り過ぎた
-	const float P = static_cast<float>(1.0 - (HitTime - Now) / Travel);
-
-	if (P < 0.0f)
+	// いま表示しようとしているノーツが、入力で消されたものなら隠す
+	const int32 ShownBeatIndex = bShowPast ? K : K + 1;
+	if (bConsumeNoteOnInput && ShownBeatIndex == ConsumedBeatIndex)
 	{
 		NoteImage->SetVisibility(ESlateVisibility::Hidden);
 		return;
 	}
 
+	const double HitTime = bShowPast ? PastBeat : NextBeat;
+
+	// 到達時間の進み具合：0 = 生成した瞬間 / 1 = 判定ラインに届いた / 1超 = 通り過ぎた
+	const float Progress = static_cast<float>(1.0 - (HitTime - Now) / Travel);
+
+	// まだ画面に現れる前
+	const float AppearProgress = FMath::Clamp(NoteAppearProgress, 0.0f, 0.9f);
+	if (Progress < AppearProgress)
+	{
+		NoteImage->SetVisibility(ESlateVisibility::Hidden);
+		return;
+	}
+
+	// 現れ始めの位置を 0、判定ラインを 1 として、遠近感をかけた位置の進み具合を求める
+	const float EasedAppear = ApplyDepthEase(AppearProgress);
+	const float P = (ApplyDepthEase(Progress) - EasedAppear) / FMath::Max(1.0f - EasedAppear, KINDA_SMALL_NUMBER);
+
 	NoteImage->SetVisibility(ESlateVisibility::HitTestInvisible);
 	NoteImage->SetRenderTranslation(FVector2D(0.0f, FMath::Lerp(NoteStartY, NoteEndY, P)));
 }
+
+float UTimingAdjustWidget::ApplyDepthEase(float Progress) const
+{
+	const float R = FMath::Max(NoteDepthRatio, 1.0f);
+
+	// 通り過ぎたあとは、判定ライン到達時の速さのまま直線で進める（分母が0に近づくのを避ける）
+	if (Progress >= 1.0f)
+	{
+		return 1.0f + R * (Progress - 1.0f);
+	}
+
+	// 3Dで等速に近づく物体の画面上の位置：奥(Progress=0)でゆっくり、手前(Progress=1)で速い。R = 1 なら等速
+	return Progress / (R - (R - 1.0f) * Progress);
+}
+
+// ============================================================
+// 入力
+// ============================================================
 
 FReply UTimingAdjustWidget::NativeOnAnalogValueChanged(const FGeometry& InGeometry, const FAnalogInputEvent& InAnalogEvent)
 {
 	const FKey Key = InAnalogEvent.GetKey();
 
+	// どちらのスティックか。レーン番号は本編の入力コンポーネントと同じ
+	//   左スティック: 左=0 / 右=1    右スティック: 左=2 / 右=3
 	bool* bArmed = nullptr;
+	int32 LeftLane = 0;   // そのスティックを左に倒したときのレーン番号（右に倒すと +1）
 	if (Key == EKeys::Gamepad_LeftX)
 	{
 		bArmed = &bLeftArmed;
+		LeftLane = 0;
 	}
 	else if (Key == EKeys::Gamepad_RightX)
 	{
 		bArmed = &bRightArmed;
+		LeftLane = 2;
 	}
 	else
 	{
 		return Super::NativeOnAnalogValueChanged(InGeometry, InAnalogEvent);
 	}
 
-	// 左右どちらでもよい。倒しきった瞬間に1回だけ受け取り、戻すまで受け取らない
-	const float Abs = FMath::Abs(InAnalogEvent.GetAnalogValue());
+	// 倒しきった瞬間に1回だけ受け取り、戻すまで次は受け取らない
+	const float Value = InAnalogEvent.GetAnalogValue();
+	const float Abs = FMath::Abs(Value);
 	if (*bArmed && Abs >= FireThreshold)
 	{
 		*bArmed = false;
-		RegisterInput(FPlatformTime::Seconds());
+		const int32 Lane = (Value < 0.0f) ? LeftLane : LeftLane + 1;
+		RegisterInput(FPlatformTime::Seconds(), Lane);
 	}
 	else if (!*bArmed && Abs <= ReleaseThreshold)
 	{
@@ -161,20 +262,10 @@ FReply UTimingAdjustWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry, 
 
 FReply UTimingAdjustWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
-	const FKey Key = InKeyEvent.GetKey();
-
 	// BackSpace = 戻る
-	if (Key == EKeys::BackSpace)
+	if (InKeyEvent.GetKey() == EKeys::BackSpace)
 	{
 		Close();
-		return FReply::Handled();
-	}
-
-	// テスト用のキー入力（押しっぱなしは無視）
-	if (bAcceptKeyboard && !InKeyEvent.IsRepeat()
-		&& (Key == EKeys::D || Key == EKeys::F || Key == EKeys::J || Key == EKeys::K))
-	{
-		RegisterInput(FPlatformTime::Seconds());
 		return FReply::Handled();
 	}
 
@@ -192,22 +283,61 @@ FReply UTimingAdjustWidget::NativeOnFocusReceived(const FGeometry& InGeometry, c
 	return Super::NativeOnFocusReceived(InGeometry, InFocusEvent);
 }
 
-void UTimingAdjustWidget::RegisterInput(double InputTime)
+// ============================================================
+// 入力の処理（ズレの計測・調整値の更新）
+// ============================================================
+
+void UTimingAdjustWidget::RegisterInput(double InputTime, int32 Lane)
 {
 	// いちばん近い拍とのズレを求める（プラス = 遅れた / マイナス = 早かった）
 	const double Interval = FMath::Max(BeatIntervalSec, 0.1f);
 	const double Rel = InputTime - StartTime;
 	const int32 BeatIndex = FMath::RoundToInt(Rel / Interval);
+	const double ErrorSec = Rel - BeatIndex * Interval;
 
-	// 最初のノーツが来る前の入力は無視
+	// 本編の判定役と同じく、いま設定されている調整値を引いたズレでパーフェクトかを見る
+	double OffsetSec = 0.0;
+	if (const URhythmSettingsSubsystem* Settings = GetRhythmSettings())
+	{
+		OffsetSec = Settings->GetInputOffsetSec();
+	}
+	const bool bPerfect = (BeatIndex >= 0) && FMath::Abs(ErrorSec - OffsetSec) <= PerfectWindowSec;
+
+	// 判定の範囲内か（下で「範囲外」として弾く入力と同じ条件）
+	const bool bInRange = (BeatIndex >= 0) && FMath::Abs(ErrorSec) <= CaptureRangeSec;
+
+	// その拍のノーツがすでに使われている（消えている）なら、2回目以降の入力は計測しない。
+	// SE は鳴らさず、倒した方向のエフェクトだけ返す
+	if (bConsumeNoteOnInput && BeatIndex >= 0 && BeatIndex == ConsumedBeatIndex)
+	{
+		if (!bFeedbackOnlyOnPerfect)
+		{
+			PlayFeedback(Lane, false, /*bInRange=*/false);
+		}
+		return;
+	}
+
+	// 範囲外でも、倒したらそのノーツは消す（以後、その拍の入力は上で弾かれる）
+	if (bConsumeNoteOnInput && BeatIndex >= 0)
+	{
+		ConsumedBeatIndex = BeatIndex;
+	}
+
+	// SE とエフェクト（範囲外・最初のノーツ前の入力でも、倒した手応えは返す）
+	if (!bFeedbackOnlyOnPerfect || bPerfect)
+	{
+		PlayFeedback(Lane, bPerfect, bInRange);
+	}
+
+	// ---- ここから下は調整値の計測 ----
+
+	// 最初のノーツが来る前の入力は計測しない
 	if (BeatIndex < 0)
 	{
 		return;
 	}
 
-	const double ErrorSec = Rel - BeatIndex * Interval;
-
-	// Bad 幅より外れた入力は無視
+	// Bad 幅より外れた入力は計測しない
 	if (FMath::Abs(ErrorSec) > CaptureRangeSec)
 	{
 		if (LastErrorText)
@@ -217,26 +347,24 @@ void UTimingAdjustWidget::RegisterInput(double InputTime)
 		return;
 	}
 
+	// ズレを記録する
 	const float ErrorMs = static_cast<float>(ErrorSec * 1000.0);
-
 	Samples.Add(ErrorMs);
-	while (Samples.Num() > FMath::Max(MaxSamples, 1))
-	{
-		Samples.RemoveAt(0);
-	}
 
 	if (LastErrorText)
 	{
 		LastErrorText->SetText(FText::FromString(FString::Printf(TEXT("%+.0fms"), ErrorMs)));
 	}
 
-	// 十分たまったら調整値を更新して保存
-	if (Samples.Num() >= MinSamplesToApply)
+	// SamplesPerAdjust 回たまったら、平均を調整値に入れて保存し、集めた数を0に戻す。
+	// 次はまた0回目から数え直して、たまったらまた更新する
+	if (Samples.Num() >= FMath::Max(SamplesPerAdjust, 1))
 	{
 		if (URhythmSettingsSubsystem* Settings = GetRhythmSettings())
 		{
 			Settings->SetInputOffsetMs(CalcOffsetMs());
 		}
+		Samples.Reset();
 		RefreshValueText();
 	}
 }
@@ -285,6 +413,96 @@ void UTimingAdjustWidget::RefreshValueText()
 	AdjustValueText->SetText(FText::FromString(Text));
 }
 
+// ============================================================
+// 演出（SE・エフェクト）
+// ============================================================
+
+UImage* UTimingAdjustWidget::GetEffectImage(int32 Lane) const
+{
+	switch (Lane)
+	{
+	case 0: return EffectLane0;
+	case 1: return EffectLane1;
+	case 2: return EffectLane2;
+	case 3: return EffectLane3;
+	default: return nullptr;
+	}
+}
+
+void UTimingAdjustWidget::PlayFeedback(int32 Lane, bool bPerfect, bool bInRange)
+{
+	if (Lane < 0 || Lane > 3)
+	{
+		return;
+	}
+
+	// SE（ポーズ中でも鳴るUI用の音として再生。SE音量スライダーが効く）。範囲外では鳴らさない
+	if (PerfectSE && (bInRange || !bSEOnlyInRange))
+	{
+		if (UAudioComponent* Audio = UGameplayStatics::CreateSound2D(
+			this, PerfectSE, SEVolume, 1.0f, 0.0f, nullptr, /*bPersistAcrossLevelTransition=*/false, /*bAutoDestroy=*/true))
+		{
+			Audio->bIsUISound = true;
+			if (SESoundClass)
+			{
+				Audio->SoundClassOverride = SESoundClass;
+			}
+			Audio->Play(PerfectSEStartTime);
+		}
+	}
+
+	// 倒した方向のエフェクト画像を出す（フェードアウトは UpdateEffects が進める）
+	EffectStartTimes[Lane] = FPlatformTime::Seconds();
+	if (UImage* Img = GetEffectImage(Lane))
+	{
+		Img->SetRenderOpacity(1.0f);
+		Img->SetRenderScale(FVector2D(EffectStartScale, EffectStartScale));
+	}
+
+	// Blueprint 側の独自演出
+	OnTimingInput(Lane, bPerfect);
+}
+
+void UTimingAdjustWidget::UpdateEffects(double Now)
+{
+	const double Duration = FMath::Max(EffectDurationSec, 0.05f);
+
+	for (int32 Lane = 0; Lane < 4; ++Lane)
+	{
+		// 出ていないレーンは何もしない
+		if (EffectStartTimes[Lane] < 0.0)
+		{
+			continue;
+		}
+
+		UImage* Img = GetEffectImage(Lane);
+		const float T = static_cast<float>((Now - EffectStartTimes[Lane]) / Duration);   // 0 → 1
+
+		// 時間が来たら消す
+		if (T >= 1.0f)
+		{
+			EffectStartTimes[Lane] = -1.0;
+			if (Img)
+			{
+				Img->SetRenderOpacity(0.0f);
+			}
+			continue;
+		}
+
+		// だんだん大きく、薄くする
+		if (Img)
+		{
+			const float Scale = FMath::Lerp(EffectStartScale, EffectEndScale, T);
+			Img->SetRenderOpacity(1.0f - T);
+			Img->SetRenderScale(FVector2D(Scale, Scale));
+		}
+	}
+}
+
+// ============================================================
+// 閉じる
+// ============================================================
+
 void UTimingAdjustWidget::HandleBack()
 {
 	Close();
@@ -292,12 +510,20 @@ void UTimingAdjustWidget::HandleBack()
 
 void UTimingAdjustWidget::Close()
 {
+	// 二重に閉じない
 	if (bClosed)
 	{
 		return;
 	}
 
 	bClosed = true;
+
+	// 戻るSE。ウィジェットを外す前に鳴らす（ポーズ中でも鳴るUI用の音。ウィジェットが消えても最後まで鳴る）
+	if (ReturnSE)
+	{
+		UGameplayStatics::PlaySound2D(this, ReturnSE);
+	}
+
 	RemoveFromParent();
 	OnClosed.Broadcast();
 }
