@@ -131,6 +131,8 @@ public:
         int32 LaneIndex
     ) const;
 
+    // 指定されたJSON譜面を読み込む
+    bool LoadChartFromPath(const FString& RelativeChartPath);
 
     // ========================================================
     // Camera
@@ -442,7 +444,7 @@ protected:
 
 
     // JSONチャートを読み込む
-    void LoadChart();
+    //void LoadChart();
 
 
     // 現在のSongTimeに応じてノーツを生成

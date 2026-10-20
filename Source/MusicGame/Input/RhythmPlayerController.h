@@ -16,6 +16,8 @@ class ABackVideoActor;
 class USongSelectWidget;
 class UTimingAdjustWidget;
 class USoundBase;
+class ARhythmMusicPlayer;
+class ANoteSpawner;
 
 UCLASS()
 class MUSICGAME_API ARhythmPlayerController : public APlayerController
@@ -74,6 +76,13 @@ private:
 	UFUNCTION()
 	void HandlePauseInput();
 
+	// 曲変更通知を受け取る
+	UFUNCTION()
+	void HandleSongChangeRequested(int32 Direction);
+
+	// 選択中の曲名を更新する
+	void RefreshSongSelectInfo();
+
 	UPROPERTY()
 	TObjectPtr<UUserWidget>PauseWidget;
 
@@ -93,6 +102,9 @@ private:
 	UPROPERTY()
 	TObjectPtr<USongSelectWidget> SongSelectWidget;
 
+	UPROPERTY()
+	TObjectPtr<ARhythmMusicPlayer> MusicPlayer;
+
 	UFUNCTION()
 	void HandleSongSelectClosed();
 
@@ -104,6 +116,15 @@ private:
 
 	UFUNCTION()
 	void HandleTimingAdjustClosed();
+
+	UFUNCTION()
+	void HandleStartRequested();
+
+	// 譜面を生成するNoteSpawner
+	UPROPERTY()
+	TObjectPtr<class ANoteSpawner> NoteSpawner;
+
+	bool bStartRequested = false;
 
 	bool bPauseInputBlocked = false;
 	double PauseInputIgnoreUntil = 0.0;

@@ -247,12 +247,13 @@ void ANoteSpawner::BeginPlay()
 		// Chart使用時はランダム生成を完全にOFF
 		bAutoSpawn = false;
 
-		LoadChart();
+		//譜面は選択後に読み込む
+		/*LoadChart();
 
 		if (bChartLoaded)
 		{
 			StartChart();
-		}
+		}*/
 	}
 
 
@@ -478,95 +479,208 @@ void ANoteSpawner::ActivateAutoCamera()
 // Load Chart
 // ============================================================
 
-void ANoteSpawner::LoadChart()
+//void ANoteSpawner::LoadChart()
+//{
+//	if (!GetWorld())
+//	{
+//		return;
+//	}
+//
+//
+//	// ========================================================
+//	// 難易度に合わせて譜面を選ぶ（HARD の譜面が空なら NORMAL を使う）
+//	// ========================================================
+//
+//	FString SelectedChartPath = ChartFilePath;
+//
+//	if (const UGameInstance* GameInstance = GetGameInstance())
+//	{
+//		if (const URhythmSettingsSubsystem* Settings = GameInstance->GetSubsystem<URhythmSettingsSubsystem>())
+//		{
+//			if (Settings->GetDifficulty() == ERhythmDifficulty::Hard && !HardChartFilePath.IsEmpty())
+//			{
+//				SelectedChartPath = HardChartFilePath;
+//			}
+//		}
+//	}
+//
+//
+//	const FString FullPath =
+//		FPaths::Combine(
+//			FPaths::ProjectContentDir(),
+//			SelectedChartPath
+//		);
+//
+//
+//	UE_LOG(
+//		LogTemp,
+//		Warning,
+//		TEXT(
+//			"NoteSpawner: Chart loading: %s"
+//		),
+//		*FullPath
+//	);
+//
+//
+//	UChartImporter* Importer =
+//		NewObject<UChartImporter>();
+//
+//	if (!Importer)
+//	{
+//		UE_LOG(
+//			LogTemp,
+//			Error,
+//			TEXT(
+//				"NoteSpawner: ChartImporter生成失敗"
+//			)
+//		);
+//
+//		return;
+//	}
+//
+//
+//	ChartNotes.Empty();
+//
+//
+//	bChartLoaded =
+//		Importer->LoadChart(
+//			FullPath,
+//			ChartNotes
+//		);
+//
+//
+//	if (!bChartLoaded)
+//	{
+//		UE_LOG(
+//			LogTemp,
+//			Error,
+//			TEXT(
+//				"NoteSpawner: Chart読み込み失敗: %s"
+//			),
+//			*FullPath
+//		);
+//
+//		return;
+//	}
+//
+//
+//	// ========================================================
+//	// Time順にソート
+//	// ========================================================
+//
+//	ChartNotes.Sort(
+//		[](const FNoteData& A, const FNoteData& B)
+//		{
+//			return A.Time < B.Time;
+//		}
+//	);
+//
+//
+//	NextChartNoteIndex = 0;
+//
+//
+//	UE_LOG(
+//		LogTemp,
+//		Warning,
+//		TEXT(
+//			"NoteSpawner: Chart読み込み成功 Notes=%d"
+//		),
+//		ChartNotes.Num()
+//	);
+//
+//
+//	// ========================================================
+//	// Chart Debug
+//	// ========================================================
+//
+//	for (int32 i = 0;
+//		i < ChartNotes.Num();
+//		i++)
+//	{
+//		const FNoteData& Note =
+//			ChartNotes[i];
+//
+//
+//		UE_LOG(
+//			LogTemp,
+//			Warning,
+//			TEXT(
+//				"Chart[%d] "
+//				"Time=%.3f "
+//				"Lane=%d "
+//				"Type=%s "
+//				"Duration=%.3f"
+//			),
+//			i,
+//			Note.Time,
+//			Note.Lane,
+//			*Note.Type,
+//			Note.Duration
+//		);
+//	}
+//}
+
+bool ANoteSpawner::LoadChartFromPath(const FString& RelativeChartPath)
 {
-	if (!GetWorld())
+	// 前回の譜面データをクリア
+	ChartNotes.Empty();
+	NextChartNoteIndex = 0;
+	bChartLoaded = false;
+	bChartRunning = false;
+	bChartPlaying = false;
+
+	// パスが空なら読み込まない
+	if (RelativeChartPath.IsEmpty())
 	{
-		return;
-	}
-
-
-	// ========================================================
-	// 難易度に合わせて譜面を選ぶ（HARD の譜面が空なら NORMAL を使う）
-	// ========================================================
-
-	FString SelectedChartPath = ChartFilePath;
-
-	if (const UGameInstance* GameInstance = GetGameInstance())
-	{
-		if (const URhythmSettingsSubsystem* Settings = GameInstance->GetSubsystem<URhythmSettingsSubsystem>())
-		{
-			if (Settings->GetDifficulty() == ERhythmDifficulty::Hard && !HardChartFilePath.IsEmpty())
-			{
-				SelectedChartPath = HardChartFilePath;
-			}
-		}
-	}
-
-
-	const FString FullPath =
-		FPaths::Combine(
-			FPaths::ProjectContentDir(),
-			SelectedChartPath
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[NoteSpawner] Chart file path is empty")
 		);
+		return false;
+	}
 
+	// Contentフォルダからの相対パスを絶対パスに変換
+	const FString FullPath = FPaths::Combine(
+		FPaths::ProjectContentDir(),
+		RelativeChartPath
+	);
 
 	UE_LOG(
 		LogTemp,
 		Warning,
-		TEXT(
-			"NoteSpawner: Chart loading: %s"
-		),
+		TEXT("[NoteSpawner] Loading chart: %s"),
 		*FullPath
 	);
 
-
-	UChartImporter* Importer =
-		NewObject<UChartImporter>();
+	// JSON読み込み用のImporterを作成
+	UChartImporter* Importer = NewObject<UChartImporter>(this);
 
 	if (!Importer)
 	{
 		UE_LOG(
 			LogTemp,
 			Error,
-			TEXT(
-				"NoteSpawner: ChartImporter生成失敗"
-			)
+			TEXT("[NoteSpawner] Failed to create ChartImporter")
 		);
-
-		return;
+		return false;
 	}
 
-
-	ChartNotes.Empty();
-
-
-	bChartLoaded =
-		Importer->LoadChart(
-			FullPath,
-			ChartNotes
-		);
-
-
-	if (!bChartLoaded)
+	// JSONを読み込む
+	if (!Importer->LoadChart(FullPath, ChartNotes))
 	{
 		UE_LOG(
 			LogTemp,
 			Error,
-			TEXT(
-				"NoteSpawner: Chart読み込み失敗: %s"
-			),
+			TEXT("[NoteSpawner] Failed to load chart: %s"),
 			*FullPath
 		);
 
-		return;
+		ChartNotes.Empty();
+		return false;
 	}
 
-
-	// ========================================================
-	// Time順にソート
-	// ========================================================
-
+	// ノーツを出現時刻順に並べる
 	ChartNotes.Sort(
 		[](const FNoteData& A, const FNoteData& B)
 		{
@@ -574,49 +688,17 @@ void ANoteSpawner::LoadChart()
 		}
 	);
 
-
-	NextChartNoteIndex = 0;
-
+	// 読み込み成功
+	bChartLoaded = true;
 
 	UE_LOG(
 		LogTemp,
 		Warning,
-		TEXT(
-			"NoteSpawner: Chart読み込み成功 Notes=%d"
-		),
+		TEXT("[NoteSpawner] Chart loaded successfully. Notes=%d"),
 		ChartNotes.Num()
 	);
 
-
-	// ========================================================
-	// Chart Debug
-	// ========================================================
-
-	for (int32 i = 0;
-		i < ChartNotes.Num();
-		i++)
-	{
-		const FNoteData& Note =
-			ChartNotes[i];
-
-
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT(
-				"Chart[%d] "
-				"Time=%.3f "
-				"Lane=%d "
-				"Type=%s "
-				"Duration=%.3f"
-			),
-			i,
-			Note.Time,
-			Note.Lane,
-			*Note.Type,
-			Note.Duration
-		);
-	}
+	return true;
 }
 
 

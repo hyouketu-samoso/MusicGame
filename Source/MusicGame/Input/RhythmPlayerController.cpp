@@ -9,6 +9,11 @@
 #include "HAL/PlatformTime.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
+#include "RhythmMusicPlayer.h"
+#include "SongData.h"
+#include "Rhythm/NoteSpawner.h"
+#include "Rhythm/RhythmSettingsSubsystem.h"
+#include "Engine/GameInstance.h"
 
 ARhythmPlayerController::ARhythmPlayerController()
 {
@@ -19,6 +24,40 @@ ARhythmPlayerController::ARhythmPlayerController()
 void ARhythmPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// レベル内のRhythmMusicPlayerを取得
+	MusicPlayer = Cast<ARhythmMusicPlayer>(
+		UGameplayStatics::GetActorOfClass(
+			this,
+			ARhythmMusicPlayer::StaticClass()
+		)
+	);
+
+	// レベル内のNoteSpawnerを取得
+	NoteSpawner = Cast<ANoteSpawner>(
+		UGameplayStatics::GetActorOfClass(
+			this,
+			ANoteSpawner::StaticClass()
+		)
+	);
+
+	if (!NoteSpawner)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[PlayerController] NoteSpawner not found")
+		);
+	}
+
+	if (!MusicPlayer)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[PlayerController] MusicPlayer not found")
+		);
+	}
 
 	// ポーズ入力を受け取る
 	if (RhythmInput)
@@ -51,6 +90,20 @@ void ARhythmPlayerController::BeginPlay()
 			SongSelectWidget->OnTimingAdjustRequested.AddDynamic(this, &ARhythmPlayerController::HandleTimingAdjustRequested);
 			SongSelectWidget->AddToViewport(100);
 
+			// 曲変更ボタンの通知を受け取る
+			SongSelectWidget->OnSongChangeRequested.AddDynamic(
+				this,
+				&ARhythmPlayerController::HandleSongChangeRequested
+			);
+
+			// スタートボタンの通知を受け取る
+			SongSelectWidget->OnStartRequested.AddDynamic(
+				this,
+				&ARhythmPlayerController::HandleStartRequested
+			);
+			// 最初に選択されている曲名を表示
+			RefreshSongSelectInfo();
+
 			FInputModeUIOnly Mode;
 			Mode.SetWidgetToFocus(SongSelectWidget->GetDefaultFocusWidget());
 			SetInputMode(Mode);
@@ -65,8 +118,140 @@ void ARhythmPlayerController::BeginPlay()
 
 void ARhythmPlayerController::HandleSongSelectClosed()
 {
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[PlayerController] SongSelectClosed called")
+	);
+
 	// 曲選択時に止めていた時間を動くようにする
 	SetPause(false);
+
+	/*if (bStartRequested)
+	{
+		bStartRequested = false;
+
+		if (MusicPlayer)
+		{
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT("[PlayerController] Calling PlayMusic")
+			);
+
+			MusicPlayer->PlayMusic();
+		}
+		else
+		{
+			UE_LOG(
+				LogTemp,
+				Error,
+				TEXT("[PlayerController] MusicPlayer is null")
+			);
+		}
+	}*/
+	if (bStartRequested)
+	{
+		bStartRequested = false;
+
+		// 必要なオブジェクトを確認
+		if (!MusicPlayer || !NoteSpawner)
+		{
+			UE_LOG(
+				LogTemp,
+				Error,
+				TEXT("[PlayerController] MusicPlayer or NoteSpawner is null")
+			);
+
+			SetInputMode(FInputModeGameOnly());
+			bShowMouseCursor = false;
+			SongSelectWidget = nullptr;
+			return;
+		}
+
+		// 選択中の曲データを取得
+		USongData* SongData = MusicPlayer->GetCurrentSongData();
+
+		if (!SongData)
+		{
+			UE_LOG(
+				LogTemp,
+				Error,
+				TEXT("[PlayerController] Current SongData is null")
+			);
+
+			SetInputMode(FInputModeGameOnly());
+			bShowMouseCursor = false;
+			SongSelectWidget = nullptr;
+			return;
+		}
+
+		// 選択中の難易度を取得
+		FString SelectedChartPath;
+
+		if (const UGameInstance* GameInstance = GetGameInstance())
+		{
+			if (const URhythmSettingsSubsystem* Settings =
+				GameInstance->GetSubsystem<URhythmSettingsSubsystem>())
+			{
+				if (Settings->GetDifficulty() == ERhythmDifficulty::Hard)
+				{
+					SelectedChartPath = SongData->HardChartFilePath;
+				}
+				else
+				{
+					SelectedChartPath = SongData->NormalChartFilePath;
+				}
+			}
+		}
+
+		// 譜面のパスが設定されているか確認
+		if (SelectedChartPath.IsEmpty())
+		{
+			UE_LOG(
+				LogTemp,
+				Error,
+				TEXT("[PlayerController] Selected chart path is empty")
+			);
+
+			SetInputMode(FInputModeGameOnly());
+			bShowMouseCursor = false;
+			SongSelectWidget = nullptr;
+			return;
+		}
+
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[PlayerController] Selected chart: %s"),
+			*SelectedChartPath
+		);
+
+		// 選択した譜面を読み込む
+		if (!NoteSpawner->LoadChartFromPath(SelectedChartPath))
+		{
+			UE_LOG(
+				LogTemp,
+				Error,
+				TEXT("[PlayerController] Chart loading failed")
+			);
+
+			SetInputMode(FInputModeGameOnly());
+			bShowMouseCursor = false;
+			SongSelectWidget = nullptr;
+			return;
+		}
+
+		// 譜面の読み込み成功後に開始する
+		NoteSpawner->StartChart();
+		MusicPlayer->PlayMusic();
+
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[PlayerController] Chart and music started")
+		);
+	}
 
 	SetInputMode(FInputModeGameOnly());
 	bShowMouseCursor = false;
@@ -112,6 +297,17 @@ void ARhythmPlayerController::HandleTimingAdjustClosed()
 	Mode.SetWidgetToFocus(SongSelectWidget->GetDefaultFocusWidget());
 	SetInputMode(Mode);
 	SongSelectWidget->FocusDefaultButton();
+}
+
+void ARhythmPlayerController::HandleStartRequested()
+{
+	bStartRequested = true;
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[PlayerController] Start requested")
+	);
 }
 
 void ARhythmPlayerController::HandlePauseInput()
@@ -208,4 +404,60 @@ void ARhythmPlayerController::SetPauseInputBlocked(bool bBlocked)
 	{
 		PauseInputIgnoreUntil = FPlatformTime::Seconds() + 0.3;
 	}
+}
+
+void ARhythmPlayerController::RefreshSongSelectInfo()
+{
+	// WidgetとMusicPlayerが存在するか確認
+	if (!SongSelectWidget || !MusicPlayer)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[PlayerController] SongSelectWidget or MusicPlayer is null")
+		);
+		return;
+	}
+
+	// 現在選択されているSongDataを取得
+	USongData* SongData = MusicPlayer->GetCurrentSongData();
+
+	if (!SongData)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[PlayerController] Current song data is null")
+		);
+		return;
+	}
+
+	// SongDataの曲名をWidgetに表示
+	SongSelectWidget->SetSongTitle(SongData->SongTitle);
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[PlayerController] Song title updated: %s"),
+		*SongData->SongTitle.ToString()
+	);
+}
+
+void ARhythmPlayerController::HandleSongChangeRequested(int32 Direction)
+{
+	if (!MusicPlayer)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[PlayerController] MusicPlayer is null")
+		);
+		return;
+	}
+
+	// 曲番号を変更
+	MusicPlayer->HandleSongChangeRequested(Direction);
+
+	// 変更後の曲名を表示
+	RefreshSongSelectInfo();
 }

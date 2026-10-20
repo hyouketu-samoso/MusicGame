@@ -99,6 +99,14 @@ void USongSelectWidget::SetSongInfo(const FText& Title, int32 NoteCount, float L
 	SongInfoText->SetText(FText::FromString(Info));
 }
 
+void USongSelectWidget::SetSongTitle(const FText& Title)
+{
+	if (SongTitleText)
+	{
+		SongTitleText->SetText(Title);
+	}
+}
+
 // 変更前
 
 //void USongSelectWidget::SetSelectedDifficulty(ESongDifficulty Difficulty)

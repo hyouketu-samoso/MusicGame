@@ -20,6 +20,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Music")
     void PlaySongByIndex(int32 Index);
 
+    // 曲を選択する（再生はしない）
+    UFUNCTION(BlueprintCallable, Category = "Music")
+    void SelectSongByIndex(int32 Index);
+
     // 現在選択されている曲を再生する
     UFUNCTION(BlueprintCallable, Category = "Music")
     void PlayMusic();
