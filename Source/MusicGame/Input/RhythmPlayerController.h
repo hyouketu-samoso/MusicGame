@@ -120,6 +120,13 @@ private:
 	UFUNCTION()
 	void HandleStartRequested();
 
+	// 選ばれている曲の譜面を読み込んで、譜面と音楽を開始する(成功で true)
+	bool StartSelectedSong();
+
+	// リトライで開き直したときに、前回の曲で、曲選択を飛ばして始める
+	UFUNCTION()
+	void StartRetrySong();
+
 	// 譜面を生成するNoteSpawner
 	UPROPERTY()
 	TObjectPtr<class ANoteSpawner> NoteSpawner;

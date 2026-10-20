@@ -30,6 +30,13 @@ public:
 		return bResult;
 	}
 
+	// 曲を開始するとき、PlayerController が呼ぶ。選んだ曲の番号を覚えておく
+	void SetLastSongIndex(int32 Index) { LastSongIndex = Index; }
+
+	// リトライで開き直したとき、前回の曲番号を取り出す(未設定なら INDEX_NONE)
+	int32 GetLastSongIndex() const { return LastSongIndex; }
+
 private:
 	bool bSkipSongSelect = false;
+	int32 LastSongIndex = INDEX_NONE;
 };

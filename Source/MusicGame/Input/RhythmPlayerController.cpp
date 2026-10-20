@@ -14,6 +14,8 @@
 #include "Rhythm/NoteSpawner.h"
 #include "Rhythm/RhythmSettingsSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "GameSessionSubsystem.h"   // リトライで曲選択を飛ばす印と、前回の曲番号
+#include "TimerManager.h"
 
 ARhythmPlayerController::ARhythmPlayerController()
 {
@@ -78,6 +80,27 @@ void ARhythmPlayerController::BeginPlay()
 	if (IsLocalPlayerController() && BackVideoClass)
 	{
 		BackVideo = GetWorld()->SpawnActor<ABackVideoActor>(BackVideoClass, BackVideoTransform);
+	}
+
+	// リトライで開き直したときは、曲選択を出さずに、前回の曲でそのまま始める
+	// (印は、読むと消える。その次に開いたときは、ふつうに曲選択が出る)
+	if (IsLocalPlayerController())
+	{
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (UGameSessionSubsystem* Session = GI->GetSubsystem<UGameSessionSubsystem>())
+			{
+				if (Session->ConsumeSkipSongSelect())
+				{
+					SetInputMode(FInputModeGameOnly());
+					bShowMouseCursor = false;
+
+					// MusicPlayer / NoteSpawner の BeginPlay が終わってから始めるため、次のフレームに回す
+					GetWorldTimerManager().SetTimerForNextTick(this, &ARhythmPlayerController::StartRetrySong);
+					return;
+				}
+			}
+		}
 	}
 
 	// 曲選択を、一番手前に出す
@@ -154,108 +177,143 @@ void ARhythmPlayerController::HandleSongSelectClosed()
 	{
 		bStartRequested = false;
 
-		// 必要なオブジェクトを確認
-		if (!MusicPlayer || !NoteSpawner)
+		// 選んだ曲の番号を覚えておく(リトライで開き直したときに、同じ曲で始めるため)
+		if (MusicPlayer)
 		{
-			UE_LOG(
-				LogTemp,
-				Error,
-				TEXT("[PlayerController] MusicPlayer or NoteSpawner is null")
-			);
-
-			SetInputMode(FInputModeGameOnly());
-			bShowMouseCursor = false;
-			SongSelectWidget = nullptr;
-			return;
-		}
-
-		// 選択中の曲データを取得
-		USongData* SongData = MusicPlayer->GetCurrentSongData();
-
-		if (!SongData)
-		{
-			UE_LOG(
-				LogTemp,
-				Error,
-				TEXT("[PlayerController] Current SongData is null")
-			);
-
-			SetInputMode(FInputModeGameOnly());
-			bShowMouseCursor = false;
-			SongSelectWidget = nullptr;
-			return;
-		}
-
-		// 選択中の難易度を取得
-		FString SelectedChartPath;
-
-		if (const UGameInstance* GameInstance = GetGameInstance())
-		{
-			if (const URhythmSettingsSubsystem* Settings =
-				GameInstance->GetSubsystem<URhythmSettingsSubsystem>())
+			if (UGameInstance* GI = GetGameInstance())
 			{
-				if (Settings->GetDifficulty() == ERhythmDifficulty::Hard)
+				if (UGameSessionSubsystem* Session = GI->GetSubsystem<UGameSessionSubsystem>())
 				{
-					SelectedChartPath = SongData->HardChartFilePath;
-				}
-				else
-				{
-					SelectedChartPath = SongData->NormalChartFilePath;
+					Session->SetLastSongIndex(MusicPlayer->GetCurrentSongIndex());
 				}
 			}
 		}
 
-		// 譜面のパスが設定されているか確認
-		if (SelectedChartPath.IsEmpty())
-		{
-			UE_LOG(
-				LogTemp,
-				Error,
-				TEXT("[PlayerController] Selected chart path is empty")
-			);
-
-			SetInputMode(FInputModeGameOnly());
-			bShowMouseCursor = false;
-			SongSelectWidget = nullptr;
-			return;
-		}
-
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT("[PlayerController] Selected chart: %s"),
-			*SelectedChartPath
-		);
-
-		// 選択した譜面を読み込む
-		if (!NoteSpawner->LoadChartFromPath(SelectedChartPath))
-		{
-			UE_LOG(
-				LogTemp,
-				Error,
-				TEXT("[PlayerController] Chart loading failed")
-			);
-
-			SetInputMode(FInputModeGameOnly());
-			bShowMouseCursor = false;
-			SongSelectWidget = nullptr;
-			return;
-		}
-
-		// 譜面の読み込み成功後に開始する
-		NoteSpawner->StartChart();
-		MusicPlayer->PlayMusic();
-
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT("[PlayerController] Chart and music started")
-		);
+		// 選んだ曲の譜面を読み込んで、開始する(失敗したときは、ログを出して、何もせず戻る)
+		StartSelectedSong();
 	}
 
 	SetInputMode(FInputModeGameOnly());
 	bShowMouseCursor = false;
 	SongSelectWidget = nullptr;
+}
+
+// 選ばれている曲の譜面を読み込んで、譜面と音楽を開始する
+// 成功したら true / 失敗したら、ログを出して false
+bool ARhythmPlayerController::StartSelectedSong()
+{
+	// 必要なオブジェクトを確認
+	if (!MusicPlayer || !NoteSpawner)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[PlayerController] MusicPlayer or NoteSpawner is null")
+		);
+
+		return false;
+	}
+
+	// 選択中の曲データを取得
+	USongData* SongData = MusicPlayer->GetCurrentSongData();
+
+	if (!SongData)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[PlayerController] Current SongData is null")
+		);
+
+		return false;
+	}
+
+	// 選択中の難易度を取得
+	FString SelectedChartPath;
+
+	if (const UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (const URhythmSettingsSubsystem* Settings =
+			GameInstance->GetSubsystem<URhythmSettingsSubsystem>())
+		{
+			if (Settings->GetDifficulty() == ERhythmDifficulty::Hard)
+			{
+				SelectedChartPath = SongData->HardChartFilePath;
+			}
+			else
+			{
+				SelectedChartPath = SongData->NormalChartFilePath;
+			}
+		}
+	}
+
+	// 譜面のパスが設定されているか確認
+	if (SelectedChartPath.IsEmpty())
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[PlayerController] Selected chart path is empty")
+		);
+
+		return false;
+	}
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[PlayerController] Selected chart: %s"),
+		*SelectedChartPath
+	);
+
+	// 選択した譜面を読み込む
+	if (!NoteSpawner->LoadChartFromPath(SelectedChartPath))
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[PlayerController] Chart loading failed")
+		);
+
+		return false;
+	}
+
+	// 譜面の読み込み成功後に開始する
+	NoteSpawner->StartChart();
+	MusicPlayer->PlayMusic();
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[PlayerController] Chart and music started")
+	);
+
+	return true;
+}
+
+// リトライで開き直したときに、前回の曲で、曲選択を飛ばして始める
+void ARhythmPlayerController::StartRetrySong()
+{
+	if (!MusicPlayer || !NoteSpawner)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[PlayerController] MusicPlayer or NoteSpawner is null (retry)"));
+		return;
+	}
+
+	// 前回の曲を選び直す(難易度は URhythmSettingsSubsystem に残っている)
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UGameSessionSubsystem* Session = GI->GetSubsystem<UGameSessionSubsystem>())
+		{
+			const int32 LastIndex = Session->GetLastSongIndex();
+			if (LastIndex != INDEX_NONE)
+			{
+				MusicPlayer->SelectSongByIndex(LastIndex);
+			}
+		}
+	}
+
+	StartSelectedSong();
 }
 
 void ARhythmPlayerController::HandleTimingAdjustRequested()
