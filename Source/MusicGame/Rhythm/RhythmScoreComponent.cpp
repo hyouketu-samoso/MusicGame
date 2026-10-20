@@ -120,7 +120,14 @@ double URhythmScoreComponent::GetDisplayScore() const
 
 bool URhythmScoreComponent::FinishSong()
 {
-	const bool bCleared = !bGameOver && Health >= 1.0f;
+	// ゲームオーバーで終わった曲は、OnGameOver の流れ（リトライ画面）に任せる
+	if (bSongFinished || bGameOver)
+	{
+		return false;
+	}
+	bSongFinished = true;
+
+	const bool bCleared = Health >= 1.0f;
 	OnSongFinished.Broadcast(bCleared, GetDisplayScore());
 	return bCleared;
 }
@@ -137,6 +144,7 @@ void URhythmScoreComponent::ResetResult()
 	JudgedCount = 0;
 	Health = FMath::Min(InitialHealth, MaxHealth);
 	bGameOver = false;
+	bSongFinished = false;
 }
 
 int32 URhythmScoreComponent::GetJudgementCount(ERhythmJudgement Judgement) const

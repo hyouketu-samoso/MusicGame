@@ -35,8 +35,21 @@ public:
 	void SetTotalJudgeCount(int32 Count) { TotalJudgeCount = FMath::Max(Count, 0); }
 
 	// 楽曲終了時に呼ぶ。クリア判定（体力 1 以上）をして OnSongFinished を発行する
+	// 1曲につき1回だけ。ゲームオーバー後・2回目以降は何もせず false を返す
 	UFUNCTION(BlueprintCallable, Category="Rhythm Score")
 	bool FinishSong();
+
+	// FinishSong 済みか
+	UFUNCTION(BlueprintPure, Category="Rhythm Score")
+	bool IsSongFinished() const { return bSongFinished; }
+
+	// ここまでに判定した数（ホールドは始点・終点で 2 と数える）
+	UFUNCTION(BlueprintPure, Category="Rhythm Score")
+	int32 GetJudgedCount() const { return JudgedCount; }
+
+	// 譜面全体の判定数（0 = 未設定）
+	UFUNCTION(BlueprintPure, Category="Rhythm Score")
+	int32 GetTotalJudgeCount() const { return TotalJudgeCount; }
 
 	// スコア・コンボ・体力を開始時の状態に戻す
 	UFUNCTION(BlueprintCallable, Category="Rhythm Score")
@@ -144,4 +157,7 @@ private:
 
 	UPROPERTY(VisibleInstanceOnly, Category="Rhythm Score|Result")
 	bool bGameOver = false;
+
+	UPROPERTY(VisibleInstanceOnly, Category="Rhythm Score|Result")
+	bool bSongFinished = false;
 };

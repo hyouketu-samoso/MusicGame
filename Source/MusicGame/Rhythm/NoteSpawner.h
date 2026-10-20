@@ -17,6 +17,7 @@ class ANoteActor;
 class AHoldNoteActor;
 class ARhythmJudge;
 class URhythmFeedbackComponent;
+class URhythmGameFlowComponent;
 class UCameraComponent;
 class UArrowComponent;
 
@@ -131,6 +132,31 @@ public:
         int32 LaneIndex
     ) const;
 
+
+    // ========================================================
+    // 譜面の進み具合（遷移の係 RhythmGameFlowComponent が曲の終わりを見るのに使う）
+    // ========================================================
+
+    // 譜面の時間（秒）。0 で最初のノーツ（譜面の 0 秒）が判定ラインに届く。譜面開始直後は負
+    UFUNCTION(BlueprintPure, Category = "Note Spawner|Chart")
+    float GetSongTime() const;
+
+    // 譜面を進めている最中か（StartChart 後）
+    UFUNCTION(BlueprintPure, Category = "Note Spawner|Chart")
+    bool IsChartRunning() const { return bUseChart && bChartRunning; }
+
+    // 譜面のノーツをすべて出し終えたか
+    UFUNCTION(BlueprintPure, Category = "Note Spawner|Chart")
+    bool HasSpawnedAllChartNotes() const { return bChartLoaded && NextChartNoteIndex >= ChartNotes.Num(); }
+
+    // 最後のノーツが終わる譜面の時間（秒）。ホールドは終点の時間
+    UFUNCTION(BlueprintPure, Category = "Note Spawner|Chart")
+    float GetChartEndTime() const;
+
+    // 譜面全体の判定数（通常ノーツ 1、ホールド 2（始点・終点））
+    UFUNCTION(BlueprintPure, Category = "Note Spawner|Chart")
+    int32 GetChartJudgeCount() const;
+
     // 指定されたJSON譜面を読み込む
     bool LoadChartFromPath(const FString& RelativeChartPath);
 
@@ -197,6 +223,15 @@ protected:
         Category = "Note Spawner|Feedback"
     )
     URhythmFeedbackComponent* Feedback = nullptr;
+
+
+    // ゲーム画面からリザルト・リトライ画面への遷移（曲の終わり・ゲームオーバーを見張る）
+    UPROPERTY(
+        VisibleAnywhere,
+        BlueprintReadOnly,
+        Category = "Note Spawner|Flow"
+    )
+    URhythmGameFlowComponent* GameFlow = nullptr;
 
 
     // ========================================================
