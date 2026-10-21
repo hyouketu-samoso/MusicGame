@@ -116,10 +116,6 @@ struct FRhythmJudgementSounds
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm")
 	TObjectPtr<USoundBase> Miss = nullptr;
 
-	// 再生を始める位置（秒）。SE の頭に無音があると押してから遅れて聞こえるので、その分を飛ばす
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm", meta=(ClampMin=0.0, Units="s"))
-	float StartTime = 0.0f;
-
 	USoundBase* Get(ERhythmJudgement Judgement) const
 	{
 		switch (Judgement)
@@ -149,8 +145,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Rhythm Feedback")
 	void StopAllHolds();
 
-	// 空打ち（ノーツが無いところを押した）の演出を出す。
-	// ※ 空打ちの通知はまだ無い。判定役に通知ができたら、そこから呼ぶ（または BindJudge で登録する）
+	// 空打ち（ノーツが無いところを押した）の演出を出す。判定役の OnLaneEmptyPress から呼ばれる
 	UFUNCTION(BlueprintCallable, Category="Rhythm Feedback")
 	void PlayEmptyPress(int32 LaneIndex);
 
@@ -227,10 +222,10 @@ private:
 	// MaxLifetime 秒たったら消す（0 以下なら消さない）
 	UNiagaraComponent* SpawnEffect(UNiagaraSystem* System, int32 LaneIndex, float MaxLifetime);
 
-	void PlaySound(USoundBase* Sound, float StartTime = 0.0f) const;
+	void PlaySound(USoundBase* Sound) const;
 
 	// SE を鳴らす（SoundClass を反映）。止めたいとき用に AudioComponent を返す
-	UAudioComponent* StartSound(USoundBase* Sound, float StartTime = 0.0f) const;
+	UAudioComponent* StartSound(USoundBase* Sound) const;
 
 	// エフェクトを出す位置と向き
 	FTransform GetEffectTransform(int32 LaneIndex) const;

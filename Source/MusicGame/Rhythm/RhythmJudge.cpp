@@ -186,6 +186,7 @@ void ARhythmJudge::PressLaneAt(int32 LaneIndex, double InputTime)
 	// 候補なしは空打ち。ノーツ・スコア・コンボ・体力は変えない（Δt < −BadWindow の早すぎる入力もここ）
 	if (TargetIndex == INDEX_NONE)
 	{
+		OnLaneEmptyPress.Broadcast(LaneIndex);
 		return;
 	}
 

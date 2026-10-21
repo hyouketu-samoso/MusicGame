@@ -61,6 +61,7 @@ URhythmFeedbackComponent::URhythmFeedbackComponent()
 		Effects.Judgement.Miss    = Load(TEXT(""), N.Miss);
 		Effects.HoldCharge = Load(N.HoldFolder, Hold + TEXT("charge"));
 		Effects.HoldBurst  = Load(N.HoldFolder, Hold + TEXT("burst"));
+		Effects.EmptyPress = Load(N.JudgementFolder, Prefix + TEXT("Dry"));  // 空打ち（NS_notes_effect_xxx_Dry）
 	}
 
 	// エフェクトは Niagara のプレビュー（+X 側から −X 向きに見る）に合わせて作られている。
@@ -89,16 +90,17 @@ URhythmFeedbackComponent::URhythmFeedbackComponent()
 		return Finder.Object;
 	};
 
-	JudgementSounds.Perfect = LoadSound(TEXT("SE_Notes_Perfect"));
-	JudgementSounds.Great   = LoadSound(TEXT("SE_Notes_Great"));
-	JudgementSounds.Good    = LoadSound(TEXT("SE_Notes_Good"));
-	JudgementSounds.Bad     = LoadSound(TEXT("SE_Notes_Bad"));
-
-	// 判定 SE は頭に約 0.125〜0.13 秒の無音があるので、鳴り始める直前から再生する
-	JudgementSounds.StartTime = 0.12f;
+	// 判定 SE（_1019 は頭の無音を削った版なので、そのまま頭から鳴らす）
+	JudgementSounds.Perfect = LoadSound(TEXT("SE_Notes_perfect_1019"));
+	JudgementSounds.Great   = LoadSound(TEXT("SE_Notes_great_1019"));
+	JudgementSounds.Good    = LoadSound(TEXT("SE_Notes_good_1019"));
+	JudgementSounds.Bad     = LoadSound(TEXT("SE_Notes_bad_1019"));
 
 	// ホールドを押している間に鳴らす（約 9.5 秒。ホールドより長いので、離したところで止める）
 	HoldLoopSound = LoadSound(TEXT("SE_Long_Notes"));
+
+	// 空打ち
+	EmptyPressSound = LoadSound(TEXT("SE_Notes_karauti_1019"));
 }
 
 void URhythmFeedbackComponent::BindJudge(ARhythmJudge* InJudge)
@@ -111,11 +113,13 @@ void URhythmFeedbackComponent::BindJudge(ARhythmJudge* InJudge)
 	if (IsValid(Judge))
 	{
 		Judge->OnNoteJudged.RemoveDynamic(this, &URhythmFeedbackComponent::HandleNoteJudged);
+		Judge->OnLaneEmptyPress.RemoveDynamic(this, &URhythmFeedbackComponent::PlayEmptyPress);
 		Judge->GetScoreComponent()->OnGameOver.RemoveDynamic(this, &URhythmFeedbackComponent::HandleGameOver);
 	}
 
 	Judge = InJudge;
 	Judge->OnNoteJudged.AddDynamic(this, &URhythmFeedbackComponent::HandleNoteJudged);
+	Judge->OnLaneEmptyPress.AddDynamic(this, &URhythmFeedbackComponent::PlayEmptyPress);
 	Judge->GetScoreComponent()->OnGameOver.AddDynamic(this, &URhythmFeedbackComponent::HandleGameOver);
 }
 
@@ -174,11 +178,11 @@ void URhythmFeedbackComponent::HandleNoteJudged(ERhythmJudgement Judgement, int3
 	switch (Point)
 	{
 	case ENoteJudgePoint::Tap:
-		PlaySound(JudgementSounds.Get(Judgement), JudgementSounds.StartTime);
+		PlaySound(JudgementSounds.Get(Judgement));
 		break;
 
 	case ENoteJudgePoint::HoldStart:
-		PlaySound(JudgementSounds.Get(Judgement), JudgementSounds.StartTime);
+		PlaySound(JudgementSounds.Get(Judgement));
 
 		// 始点ミスは押し続けにならない。始点の Bad でゲームオーバーになったときも始めない
 		// （ゲームオーバーの通知はこの判定の通知より先に来ている）
@@ -200,11 +204,11 @@ void URhythmFeedbackComponent::HandleNoteJudged(ERhythmJudgement Judgement, int3
 
 		if (USoundBase* EndSound = HoldEndSounds.Get(Judgement))
 		{
-			PlaySound(EndSound, HoldEndSounds.StartTime);
+			PlaySound(EndSound);
 		}
 		else
 		{
-			PlaySound(JudgementSounds.Get(Judgement), JudgementSounds.StartTime);
+			PlaySound(JudgementSounds.Get(Judgement));
 		}
 		break;
 	}
@@ -298,12 +302,12 @@ UNiagaraComponent* URhythmFeedbackComponent::SpawnEffect(UNiagaraSystem* System,
 	return Effect;
 }
 
-void URhythmFeedbackComponent::PlaySound(USoundBase* Sound, float StartTime) const
+void URhythmFeedbackComponent::PlaySound(USoundBase* Sound) const
 {
-	StartSound(Sound, StartTime);
+	StartSound(Sound);
 }
 
-UAudioComponent* URhythmFeedbackComponent::StartSound(USoundBase* Sound, float StartTime) const
+UAudioComponent* URhythmFeedbackComponent::StartSound(USoundBase* Sound) const
 {
 	if (!Sound)
 	{
@@ -321,7 +325,7 @@ UAudioComponent* URhythmFeedbackComponent::StartSound(USoundBase* Sound, float S
 	{
 		Audio->SoundClassOverride = SoundClass;
 	}
-	Audio->Play(StartTime);
+	Audio->Play();
 	return Audio;
 }
 

@@ -23,6 +23,9 @@ class URhythmScoreComponent;
 // Point       : 通常ノーツか、ホールドの始点か終点か
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(FOnNoteJudged, ERhythmJudgement, Judgement, int32, LaneIndex, float, TimingError, int32, Combo, ENoteJudgePoint, Point);
 
+// 空打ち（判定できるノーツが無いレーンを押した）の通知。ノーツ・スコア・コンボ・体力は変わらない
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnLaneEmptyPress, int32, LaneIndex);
+
 UCLASS()
 class ARhythmJudge : public AActor
 {
@@ -72,6 +75,10 @@ public:
 	// 判定が出るたびに呼ばれる
 	UPROPERTY(BlueprintAssignable, Category="Rhythm Judge")
 	FOnNoteJudged OnNoteJudged;
+
+	// 空打ちのたびに呼ばれる（ゲームオーバー後・ホールド中のレーンでは呼ばれない）
+	UPROPERTY(BlueprintAssignable, Category="Rhythm Judge")
+	FOnLaneEmptyPress OnLaneEmptyPress;
 
 protected:
 
