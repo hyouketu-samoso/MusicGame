@@ -259,6 +259,15 @@ FReply UMenuWidgetBase::NativeOnPreviewKeyDown(const FGeometry& InGeometry,
 		return FReply::Handled();
 	}
 
+	// Bの押しっぱなし（リピート）は受け取らない。
+	// 別の画面から戻った直後に B を押したままだと、リピートの入力がフォーカス中のButtonに届き、
+	// Button が「押された状態」になって、B を離したときに勝手に決定されてしまうため
+	if (InKeyEvent.GetKey() == EKeys::Gamepad_FaceButton_Right
+		&& InKeyEvent.IsRepeat())
+	{
+		return FReply::Handled();
+	}
+
 	// B(Xbox: B / PS: ○)で、選択中のButtonを実行する
 	if (InKeyEvent.GetKey() == EKeys::Gamepad_FaceButton_Right
 		&& !InKeyEvent.IsRepeat())
