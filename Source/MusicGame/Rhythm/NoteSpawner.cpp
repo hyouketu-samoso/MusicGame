@@ -7,6 +7,8 @@
 #include "RhythmSettingsSubsystem.h"
 #include "RhythmGameSettings.h"
 #include "RhythmFeedbackComponent.h"
+#include "RhythmGameFlowComponent.h"
+#include "RhythmScoreComponent.h"
 #include "Engine/GameInstance.h"
 
 #include "Camera/CameraComponent.h"
@@ -70,6 +72,16 @@ ANoteSpawner::ANoteSpawner()
 	Feedback =
 		CreateDefaultSubobject<URhythmFeedbackComponent>(
 			TEXT("Feedback")
+		);
+
+
+	// ========================================================
+	// GameFlow（リザルト・リトライ画面への遷移）
+	// ========================================================
+
+	GameFlow =
+		CreateDefaultSubobject<URhythmGameFlowComponent>(
+			TEXT("GameFlow")
 		);
 
 
@@ -235,6 +247,12 @@ void ANoteSpawner::BeginPlay()
 	if (Feedback && Judge)
 	{
 		Feedback->BindJudge(Judge);
+	}
+
+	// 曲の終わり・ゲームオーバーでリザルト・リトライ画面へ
+	if (GameFlow && Judge)
+	{
+		GameFlow->BindJudge(Judge);
 	}
 
 
@@ -764,6 +782,15 @@ void ANoteSpawner::StartChart()
 
 	bChartRunning = true;
 	bChartPlaying = false;
+
+
+	// スコアの理論最大と「全ノーツ判定済み」の判断に、譜面全体の判定数を使う
+	if (Judge && Judge->GetScoreComponent())
+	{
+		Judge->GetScoreComponent()->SetTotalJudgeCount(
+			GetChartJudgeCount()
+		);
+	}
 
 
 	UE_LOG(
@@ -1349,6 +1376,59 @@ float ANoteSpawner::GetLaneTargetYaw(
 	return LaneTargetYaws.IsValidIndex(LaneIndex)
 		? LaneTargetYaws[LaneIndex]
 		: 0.0f;
+}
+
+
+// ============================================================
+// Chart Progress（遷移の係が読む）
+// ============================================================
+
+float ANoteSpawner::GetSongTime() const
+{
+	if (!GetWorld() || !bChartRunning)
+	{
+		return 0.0f;
+	}
+
+	return static_cast<float>(
+		GetWorld()->GetTimeSeconds() - ChartStartWorldTime
+	);
+}
+
+
+float ANoteSpawner::GetChartEndTime() const
+{
+	float EndTime = 0.0f;
+
+	for (const FNoteData& NoteData : ChartNotes)
+	{
+		EndTime = FMath::Max(
+			EndTime,
+			NoteData.Time + FMath::Max(NoteData.Duration, 0.0f)
+		);
+	}
+
+	return EndTime;
+}
+
+
+int32 ANoteSpawner::GetChartJudgeCount() const
+{
+	int32 Count = 0;
+
+	for (const FNoteData& NoteData : ChartNotes)
+	{
+		// ホールドは始点・終点の 2 回判定する（UpdateChartSpawn と同じ見分け方）
+		const bool bHold =
+			NoteData.Type.Equals(
+				TEXT("hold"),
+				ESearchCase::IgnoreCase
+			);
+
+		Count += bHold ? 2 : 1;
+	}
+
+	return Count;
 }
 
 
