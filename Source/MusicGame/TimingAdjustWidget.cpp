@@ -77,21 +77,16 @@ void UTimingAdjustWidget::NativeConstruct()
 	bRightArmed = true;
 	bClosed = false;
 	ConsumedBeatIndex = -1;
-
-	// エフェクト画像は最初は見えなくしておく
-	for (int32 Lane = 0; Lane < 4; ++Lane)
-	{
-		EffectStartTimes[Lane] = -1.0;
-		if (UImage* Img = GetEffectImage(Lane))
-		{
-			Img->SetRenderOpacity(0.0f);
-		}
-	}
+	ConsumedInputTime = 0.0;
 
 	// 初回の読み込み待ちでSEが遅れないように先に読み込む
 	if (PerfectSE)
 	{
 		UGameplayStatics::PrimeSound(PerfectSE);
+	}
+	if (EmptyPressSE)
+	{
+		UGameplayStatics::PrimeSound(EmptyPressSE);
 	}
 
 	if (LastErrorText)
@@ -114,7 +109,6 @@ void UTimingAdjustWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 	// ゲームが止まっていてもウィジェットは動く。時刻は実時間で測る
 	const double Now = FPlatformTime::Seconds();
 	UpdateNoteVisual(Now);
-	UpdateEffects(Now);
 
 	// フォーカス中は色を変えて、選ばれていることが分かるようにする
 	BackButton->SetBackgroundColor(BackButton->HasKeyboardFocus() ? SelectedColor : NormalColor);
@@ -190,19 +184,15 @@ FReply UTimingAdjustWidget::NativeOnAnalogValueChanged(const FGeometry& InGeomet
 {
 	const FKey Key = InAnalogEvent.GetKey();
 
-	// どちらのスティックか。レーン番号は本編の入力コンポーネントと同じ
-	//   左スティック: 左=0 / 右=1    右スティック: 左=2 / 右=3
+	// どちらのスティックか（左右どちらでもよい）
 	bool* bArmed = nullptr;
-	int32 LeftLane = 0;   // そのスティックを左に倒したときのレーン番号（右に倒すと +1）
 	if (Key == EKeys::Gamepad_LeftX)
 	{
 		bArmed = &bLeftArmed;
-		LeftLane = 0;
 	}
 	else if (Key == EKeys::Gamepad_RightX)
 	{
 		bArmed = &bRightArmed;
-		LeftLane = 2;
 	}
 	else
 	{
@@ -210,13 +200,11 @@ FReply UTimingAdjustWidget::NativeOnAnalogValueChanged(const FGeometry& InGeomet
 	}
 
 	// 倒しきった瞬間に1回だけ受け取り、戻すまで次は受け取らない
-	const float Value = InAnalogEvent.GetAnalogValue();
-	const float Abs = FMath::Abs(Value);
+	const float Abs = FMath::Abs(InAnalogEvent.GetAnalogValue());
 	if (*bArmed && Abs >= FireThreshold)
 	{
 		*bArmed = false;
-		const int32 Lane = (Value < 0.0f) ? LeftLane : LeftLane + 1;
-		RegisterInput(FPlatformTime::Seconds(), Lane);
+		RegisterInput(FPlatformTime::Seconds());
 	}
 	else if (!*bArmed && Abs <= ReleaseThreshold)
 	{
@@ -287,7 +275,7 @@ FReply UTimingAdjustWidget::NativeOnFocusReceived(const FGeometry& InGeometry, c
 // 入力の処理（ズレの計測・調整値の更新）
 // ============================================================
 
-void UTimingAdjustWidget::RegisterInput(double InputTime, int32 Lane)
+void UTimingAdjustWidget::RegisterInput(double InputTime)
 {
 	// いちばん近い拍とのズレを求める（プラス = 遅れた / マイナス = 早かった）
 	const double Interval = FMath::Max(BeatIntervalSec, 0.1f);
@@ -307,12 +295,19 @@ void UTimingAdjustWidget::RegisterInput(double InputTime, int32 Lane)
 	const bool bInRange = (BeatIndex >= 0) && FMath::Abs(ErrorSec) <= CaptureRangeSec;
 
 	// その拍のノーツがすでに使われている（消えている）なら、2回目以降の入力は計測しない。
-	// SE は鳴らさず、倒した方向のエフェクトだけ返す
 	if (bConsumeNoteOnInput && BeatIndex >= 0 && BeatIndex == ConsumedBeatIndex)
 	{
+		// 1回目の直後（両方のスティックを同時に倒した）なら、同時入力として何も鳴らさない。
+		// 1回目のSEで足りているので、SEが二重にならず、空打ちも鳴らない
+		if ((InputTime - ConsumedInputTime) <= SimultaneousInputSec)
+		{
+			return;
+		}
+
+		// 時間がたってからの入力（連打など）は、ノーツが消えたあとなので空打ち
 		if (!bFeedbackOnlyOnPerfect)
 		{
-			PlayFeedback(Lane, false, /*bInRange=*/false);
+			PlayInputSE(/*bInRange=*/false);
 		}
 		return;
 	}
@@ -321,12 +316,13 @@ void UTimingAdjustWidget::RegisterInput(double InputTime, int32 Lane)
 	if (bConsumeNoteOnInput && BeatIndex >= 0)
 	{
 		ConsumedBeatIndex = BeatIndex;
+		ConsumedInputTime = InputTime;
 	}
 
-	// SE とエフェクト（範囲外・最初のノーツ前の入力でも、倒した手応えは返す）
+	// SE（範囲外・最初のノーツ前の入力は、空打ちのSE）
 	if (!bFeedbackOnlyOnPerfect || bPerfect)
 	{
-		PlayFeedback(Lane, bPerfect, bInRange);
+		PlayInputSE(bInRange);
 	}
 
 	// ---- ここから下は調整値の計測 ----
@@ -414,88 +410,29 @@ void UTimingAdjustWidget::RefreshValueText()
 }
 
 // ============================================================
-// 演出（SE・エフェクト）
+// SE
 // ============================================================
 
-UImage* UTimingAdjustWidget::GetEffectImage(int32 Lane) const
+void UTimingAdjustWidget::PlayInputSE(bool bInRange)
 {
-	switch (Lane)
-	{
-	case 0: return EffectLane0;
-	case 1: return EffectLane1;
-	case 2: return EffectLane2;
-	case 3: return EffectLane3;
-	default: return nullptr;
-	}
-}
-
-void UTimingAdjustWidget::PlayFeedback(int32 Lane, bool bPerfect, bool bInRange)
-{
-	if (Lane < 0 || Lane > 3)
+	// 範囲内はパーフェクトのSE、範囲外（空打ち）は空打ちのSE。空打ちSEが空なら鳴らさない
+	USoundBase* Sound = bInRange ? PerfectSE.Get() : EmptyPressSE.Get();
+	const float SEStartTime = bInRange ? PerfectSEStartTime : EmptyPressSEStartTime;
+	if (!Sound)
 	{
 		return;
 	}
 
-	// SE（ポーズ中でも鳴るUI用の音として再生。SE音量スライダーが効く）。範囲外では鳴らさない
-	if (PerfectSE && (bInRange || !bSEOnlyInRange))
+	// ポーズ中でも鳴るUI用の音として再生する。SE音量スライダーが効く
+	if (UAudioComponent* Audio = UGameplayStatics::CreateSound2D(
+		this, Sound, SEVolume, 1.0f, 0.0f, nullptr, /*bPersistAcrossLevelTransition=*/false, /*bAutoDestroy=*/true))
 	{
-		if (UAudioComponent* Audio = UGameplayStatics::CreateSound2D(
-			this, PerfectSE, SEVolume, 1.0f, 0.0f, nullptr, /*bPersistAcrossLevelTransition=*/false, /*bAutoDestroy=*/true))
+		Audio->bIsUISound = true;
+		if (SESoundClass)
 		{
-			Audio->bIsUISound = true;
-			if (SESoundClass)
-			{
-				Audio->SoundClassOverride = SESoundClass;
-			}
-			Audio->Play(PerfectSEStartTime);
+			Audio->SoundClassOverride = SESoundClass;
 		}
-	}
-
-	// 倒した方向のエフェクト画像を出す（フェードアウトは UpdateEffects が進める）
-	EffectStartTimes[Lane] = FPlatformTime::Seconds();
-	if (UImage* Img = GetEffectImage(Lane))
-	{
-		Img->SetRenderOpacity(1.0f);
-		Img->SetRenderScale(FVector2D(EffectStartScale, EffectStartScale));
-	}
-
-	// Blueprint 側の独自演出
-	OnTimingInput(Lane, bPerfect);
-}
-
-void UTimingAdjustWidget::UpdateEffects(double Now)
-{
-	const double Duration = FMath::Max(EffectDurationSec, 0.05f);
-
-	for (int32 Lane = 0; Lane < 4; ++Lane)
-	{
-		// 出ていないレーンは何もしない
-		if (EffectStartTimes[Lane] < 0.0)
-		{
-			continue;
-		}
-
-		UImage* Img = GetEffectImage(Lane);
-		const float T = static_cast<float>((Now - EffectStartTimes[Lane]) / Duration);   // 0 → 1
-
-		// 時間が来たら消す
-		if (T >= 1.0f)
-		{
-			EffectStartTimes[Lane] = -1.0;
-			if (Img)
-			{
-				Img->SetRenderOpacity(0.0f);
-			}
-			continue;
-		}
-
-		// だんだん大きく、薄くする
-		if (Img)
-		{
-			const float Scale = FMath::Lerp(EffectStartScale, EffectEndScale, T);
-			Img->SetRenderOpacity(1.0f - T);
-			Img->SetRenderScale(FVector2D(Scale, Scale));
-		}
+		Audio->Play(SEStartTime);
 	}
 }
 

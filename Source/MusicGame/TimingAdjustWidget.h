@@ -3,9 +3,8 @@
 //  役割 : 入力タイミングの調整画面。
 //         一定間隔で落ちてくるノーツに合わせてスティックを倒し、
 //         拍とのズレ(ms)の平均から入力オフセットを自動で決めて保存する。
-//  入力 : 左右スティックの左右4方向（本編と同じレーン番号）
-//         Lane 0=左スティック左 / 1=左スティック右 / 2=右スティック左 / 3=右スティック右
-//  演出 : 倒したときに SE と、倒した方向のエフェクト画像を出す
+//  入力 : 左右スティックを倒したとき（左右どちらのスティックでもよい）
+//  演出 : 倒したときに SE を鳴らす（範囲内はパーフェクトのSE、範囲外は空打ちのSE）
 //  操作 : 右ボタン(B)=決定（戻るボタン） / 下ボタン(A)・BackSpace=戻る
 // ============================================================
 #pragma once
@@ -72,6 +71,12 @@ protected:
 	// true: 判定の範囲外でもスティックを倒したら、そのノーツを消す
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TimingAdjust")
 	bool bConsumeNoteOnInput = true;
+
+	// 両方のスティックを「同時」に倒したとみなす秒数。
+	// 1回目の入力からこの時間以内に来た、同じノーツへの入力は、同時入力として何も鳴らさない
+	// （1回目のSEだけが鳴る）。これを過ぎてからの入力は、ノーツが消えたあとなので空打ちになる
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TimingAdjust", meta = (ClampMin = "0.0", Units = "s"))
+	float SimultaneousInputSec = 0.10f;
 
 	// 判定ラインを通り過ぎたあと、見えたままにする秒数
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TimingAdjust", meta = (ClampMin = "0.0", Units = "s"))
@@ -147,7 +152,7 @@ protected:
 	TObjectPtr<USoundBase> ReturnSE;
 
 	// ============================================================
-	// 入力フィードバック（SE・エフェクト）
+	// 入力フィードバック（SE）
 	// ============================================================
 
 	// 倒したときに鳴らすSE。初期値は本編と同じ SE_Notes_Perfect
@@ -166,34 +171,22 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TimingAdjust|Feedback")
 	TObjectPtr<USoundClass> SESoundClass;
 
-	// true: 判定の範囲外（拍から CaptureRangeSec より外れた入力・最初のノーツ前の入力）ではSEを鳴らさない
+	// 空打ち（判定の範囲外・最初のノーツ前・すでに消えたノーツへの入力）のときに鳴らすSE。
+	// 範囲内ではパーフェクトのSEを鳴らし、範囲外ではこちらを鳴らす。空のときは範囲外では鳴らさない
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TimingAdjust|Feedback")
-	bool bSEOnlyInRange = true;
+	TObjectPtr<USoundBase> EmptyPressSE;
 
-	// true: 実際にパーフェクト幅に入ったときだけ SE とエフェクトを出す / false: 倒すたびに毎回出す
+	// 空打ちSEの再生開始位置（SEの頭の無音を飛ばす）
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TimingAdjust|Feedback", meta = (ClampMin = "0.0", Units = "s"))
+	float EmptyPressSEStartTime = 0.0f;
+
+	// true: 実際にパーフェクト幅に入ったときだけ SE を鳴らす / false: 倒すたびに毎回鳴らす（範囲外は空打ちSE）
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TimingAdjust|Feedback")
 	bool bFeedbackOnlyOnPerfect = false;
 
 	// パーフェクト幅（秒）。判定役の PerfectWindow（0.04）に合わせる
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TimingAdjust|Feedback", meta = (ClampMin = "0.0", Units = "s"))
 	float PerfectWindowSec = 0.040f;
-
-	// エフェクト画像が消えるまでの秒数
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TimingAdjust|Feedback", meta = (ClampMin = "0.05", Units = "s"))
-	float EffectDurationSec = 0.25f;
-
-	// エフェクト画像の大きさ（出た瞬間）
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TimingAdjust|Feedback")
-	float EffectStartScale = 0.8f;
-
-	// エフェクト画像の大きさ（消える間際）
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TimingAdjust|Feedback")
-	float EffectEndScale = 1.3f;
-
-	// 倒したときに呼ばれる。Niagara や UMG アニメなど、Blueprint 側で独自の演出を足したいとき用。
-	// Lane: 0=左スティック左 / 1=左スティック右 / 2=右スティック左 / 3=右スティック右
-	UFUNCTION(BlueprintImplementableEvent, Category = "TimingAdjust|Feedback")
-	void OnTimingInput(int32 Lane, bool bPerfect);
 
 	// ============================================================
 	// WBP 側に同じ名前の部品を置く（「変数である」にチェック）
@@ -209,17 +202,11 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> NoteImage;          // 落ちてくるノーツ
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> LastErrorText;  // 直前のズレ（例「+12ms」「範囲外」）
 
-	// 倒した方向のエフェクト画像（レーンごと。置いたものだけ光る）
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> EffectLane0;   // 左スティック 左
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> EffectLane1;   // 左スティック 右
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> EffectLane2;   // 右スティック 左
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> EffectLane3;   // 右スティック 右
-
 private:
 	UFUNCTION() void HandleBack();
 
-	// 入力を1回受け取り、拍とのズレ計算・演出・ノーツ消去を行う
-	void RegisterInput(double InputTime, int32 Lane);
+	// 入力を1回受け取り、拍とのズレ計算・SE・ノーツ消去を行う
+	void RegisterInput(double InputTime);
 
 	// 集めたズレの平均（調整値 ms）を求める
 	int32 CalcOffsetMs() const;
@@ -233,14 +220,8 @@ private:
 	// 現在の調整値の表示を更新する
 	void RefreshValueText();
 
-	// SE とエフェクトを出す
-	void PlayFeedback(int32 Lane, bool bPerfect, bool bInRange);
-
-	// エフェクト画像のフェードアウトを進める
-	void UpdateEffects(double Now);
-
-	// レーン番号に対応するエフェクト画像（無ければ nullptr）
-	UImage* GetEffectImage(int32 Lane) const;
+	// SE を鳴らす（範囲内ならパーフェクトのSE、範囲外なら空打ちのSE）
+	void PlayInputSE(bool bInRange);
 
 	class URhythmSettingsSubsystem* GetRhythmSettings() const;
 
@@ -250,5 +231,5 @@ private:
 	bool bRightArmed = true;        // 右スティックを受け付けられる状態か
 	bool bClosed = false;           // 閉じ済みか（二重に閉じない）
 	int32 ConsumedBeatIndex = -1;   // 入力で消したノーツの拍番号（-1 = なし）
-	double EffectStartTimes[4] = { -1.0, -1.0, -1.0, -1.0 };   // レーンごとのエフェクト開始時刻（-1 = 出ていない）
+	double ConsumedInputTime = 0.0; // そのノーツを消した入力の時刻（実時間）
 };
