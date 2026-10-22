@@ -57,6 +57,12 @@ public:
     UFUNCTION(BlueprintPure, Category = "Music")
     int32 GetCurrentSongIndex() const;
 
+
+    // 音楽の再生開始を遅らせる時間（秒）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm|Timing")
+    float MusicStartDelay = 0.2f;
+
+    FTimerHandle MusicStartTimerHandle;
 protected:
     virtual void BeginPlay() override;
 
