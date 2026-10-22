@@ -5,6 +5,8 @@
 // ・ホールドを押している間     : HoldCharge エフェクト（+ HoldLoopSound）を出し続ける
 // ・ホールドの終点（離したとき）: HoldCharge を止めて、判定ごとのエフェクト + HoldBurst（Good 以上）+ SE
 // ・空打ち（ノーツが無いところを押した）: EmptyPress エフェクト + EmptyPressSound
+// ・ミス : その瞬間は何も出さない。ミスから MissPressWindow 秒以内にそのレーンを押したら
+//          空打ちの代わりに Judgement.Miss のエフェクト（+ MissPressSound）を1回だけ出す
 //
 // エフェクトはデザイナーのアセットが初期値（左外側 = 赤白 / 左内側 = 赤暗 / 右内側 = 青暗 / 右外側 = 青白）。向きは Yaw 180（Niagara のプレビューと同じ見た目）。内側2レーンは外側向きのアセット待ち。
 // SE はサウンド担当の SE（Sound_P/Sound_SE）が初期値。どちらもエディタで差し替えられる（空の欄は何も出さない）。
@@ -116,10 +118,6 @@ struct FRhythmJudgementSounds
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm")
 	TObjectPtr<USoundBase> Miss = nullptr;
 
-	// 再生を始める位置（秒）。SE の頭に無音があると押してから遅れて聞こえるので、その分を飛ばす
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm", meta=(ClampMin=0.0, Units="s"))
-	float StartTime = 0.0f;
-
 	USoundBase* Get(ERhythmJudgement Judgement) const
 	{
 		switch (Judgement)
@@ -149,10 +147,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Rhythm Feedback")
 	void StopAllHolds();
 
-	// 空打ち（ノーツが無いところを押した）の演出を出す。
-	// ※ 空打ちの通知はまだ無い。判定役に通知ができたら、そこから呼ぶ（または BindJudge で登録する）
+	// 空打ち（ノーツが無いところを押した）の演出を出す
 	UFUNCTION(BlueprintCallable, Category="Rhythm Feedback")
 	void PlayEmptyPress(int32 LaneIndex);
+
+	// ミスしてすぐ押した（MissPressWindow 秒以内）ときの演出を出す（Judgement.Miss のエフェクト）
+	UFUNCTION(BlueprintCallable, Category="Rhythm Feedback")
+	void PlayMissPress(int32 LaneIndex);
 
 protected:
 
@@ -182,6 +183,11 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Feedback|Effect", meta=(ClampMin=0.0, Units="s"))
 	float EffectMaxLifetime = 2.0f;
 
+	// ミスになってから何秒以内にそのレーンを押したら、ミスのエフェクトを出すか。
+	// ミスの瞬間には何も出さない（見逃しただけならエフェクトなし）。ホールド終点のミスは対象外
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Feedback|Effect", meta=(ClampMin=0.0, Units="s"))
+	float MissPressWindow = 0.5f;
+
 	// ---------- SE ----------
 
 	// 通常ノーツ・ホールドの始点の判定 SE
@@ -200,6 +206,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Feedback|Sound")
 	TObjectPtr<USoundBase> EmptyPressSound = nullptr;
 
+	// ミスしてすぐ押したときの SE（空なら鳴らさない）
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Feedback|Sound")
+	TObjectPtr<USoundBase> MissPressSound = nullptr;
+
 	// SE 全体の音量
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Feedback|Sound", meta=(ClampMin=0.0))
 	float SoundVolume = 1.0f;
@@ -217,6 +227,10 @@ private:
 	UFUNCTION()
 	void HandleGameOver();
 
+	// 空打ちの通知。直前にミスしたレーンならミスの演出、そうでなければ空打ちの演出
+	UFUNCTION()
+	void HandleLaneEmptyPress(int32 LaneIndex);
+
 	// ホールドを押し始めた / 離した（終点の判定が出た）
 	void StartHold(int32 LaneIndex);
 	void StopHold(int32 LaneIndex);
@@ -227,10 +241,10 @@ private:
 	// MaxLifetime 秒たったら消す（0 以下なら消さない）
 	UNiagaraComponent* SpawnEffect(UNiagaraSystem* System, int32 LaneIndex, float MaxLifetime);
 
-	void PlaySound(USoundBase* Sound, float StartTime = 0.0f) const;
+	void PlaySound(USoundBase* Sound) const;
 
 	// SE を鳴らす（SoundClass を反映）。止めたいとき用に AudioComponent を返す
-	UAudioComponent* StartSound(USoundBase* Sound, float StartTime = 0.0f) const;
+	UAudioComponent* StartSound(USoundBase* Sound) const;
 
 	// エフェクトを出す位置と向き
 	FTransform GetEffectTransform(int32 LaneIndex) const;
@@ -246,4 +260,7 @@ private:
 
 	UPROPERTY()
 	TMap<int32, TObjectPtr<UAudioComponent>> HoldSounds;
+
+	// ミスしたレーンの「押したらミスのエフェクトを出す」締め切り（ワールド時間、キー = レーン番号）
+	TMap<int32, double> MissPressDeadlines;
 };
