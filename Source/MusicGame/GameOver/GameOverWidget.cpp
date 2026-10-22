@@ -14,7 +14,7 @@
 
 // ボタンを「フォーカスしない」にする
 // (エンジンのバージョンでプロパティ名が違っても動くよう、名前で探して設定する)
-static void SetButtonNotFocusable(UButton* Button)
+static void SetGameOverButtonNotFocusable(UButton* Button)
 {
 	if (!Button)
 	{
@@ -40,7 +40,7 @@ void UGameOverWidget::NativeConstruct()
 	// ボタンは「フォーカスしない」設定にする → UE標準の青い枠線が出ない
 	if (TitleButton)
 	{
-		SetButtonNotFocusable(TitleButton);
+		SetGameOverButtonNotFocusable(TitleButton);
 		TitleButton->OnHovered.AddUniqueDynamic(this, &UGameOverWidget::HandleTitleHovered);
 		TitleButton->OnClicked.AddUniqueDynamic(this, &UGameOverWidget::HandleTitleClicked);
 		ApplyButtonImage(TitleButton, TitleButtonTexture);
@@ -48,7 +48,7 @@ void UGameOverWidget::NativeConstruct()
 	}
 	if (GameEndButton)
 	{
-		SetButtonNotFocusable(GameEndButton);
+		SetGameOverButtonNotFocusable(GameEndButton);
 		GameEndButton->OnHovered.AddUniqueDynamic(this, &UGameOverWidget::HandleGameEndHovered);
 		GameEndButton->OnClicked.AddUniqueDynamic(this, &UGameOverWidget::HandleGameEndClicked);
 		ApplyButtonImage(GameEndButton, GameEndButtonTexture);
