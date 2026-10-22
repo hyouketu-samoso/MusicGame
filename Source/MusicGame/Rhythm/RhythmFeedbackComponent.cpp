@@ -113,14 +113,37 @@ void URhythmFeedbackComponent::BindJudge(ARhythmJudge* InJudge)
 	if (IsValid(Judge))
 	{
 		Judge->OnNoteJudged.RemoveDynamic(this, &URhythmFeedbackComponent::HandleNoteJudged);
-		Judge->OnLaneEmptyPress.RemoveDynamic(this, &URhythmFeedbackComponent::PlayEmptyPress);
+		Judge->OnLaneEmptyPress.RemoveDynamic(this, &URhythmFeedbackComponent::HandleLaneEmptyPress);
 		Judge->GetScoreComponent()->OnGameOver.RemoveDynamic(this, &URhythmFeedbackComponent::HandleGameOver);
 	}
 
 	Judge = InJudge;
 	Judge->OnNoteJudged.AddDynamic(this, &URhythmFeedbackComponent::HandleNoteJudged);
-	Judge->OnLaneEmptyPress.AddDynamic(this, &URhythmFeedbackComponent::PlayEmptyPress);
+	Judge->OnLaneEmptyPress.AddDynamic(this, &URhythmFeedbackComponent::HandleLaneEmptyPress);
 	Judge->GetScoreComponent()->OnGameOver.AddDynamic(this, &URhythmFeedbackComponent::HandleGameOver);
+}
+
+void URhythmFeedbackComponent::HandleLaneEmptyPress(int32 LaneIndex)
+{
+	// ミスしてから MissPressWindow 秒以内の入力なら、空打ちの代わりにミスのエフェクト（最初の1回だけ）
+	double Deadline = 0.0;
+	if (MissPressDeadlines.RemoveAndCopyValue(LaneIndex, Deadline) && GetWorld()->GetTimeSeconds() <= Deadline)
+	{
+		PlayMissPress(LaneIndex);
+		return;
+	}
+
+	PlayEmptyPress(LaneIndex);
+}
+
+void URhythmFeedbackComponent::PlayMissPress(int32 LaneIndex)
+{
+	if (const FRhythmLaneEffects* Effects = FindLaneEffects(LaneIndex))
+	{
+		SpawnEffect(Effects->Judgement.Miss, LaneIndex);
+	}
+
+	PlaySound(MissPressSound);
 }
 
 void URhythmFeedbackComponent::PlayEmptyPress(int32 LaneIndex)
@@ -167,6 +190,22 @@ void URhythmFeedbackComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void URhythmFeedbackComponent::HandleNoteJudged(ERhythmJudgement Judgement, int32 LaneIndex, float TimingError, int32 Combo, ENoteJudgePoint Point)
 {
+	// ミスの瞬間は何も出さない。見逃しただけならエフェクトなし
+	if (Judgement == ERhythmJudgement::Miss)
+	{
+		if (Point == ENoteJudgePoint::HoldEnd)
+		{
+			// 終点のミス（早く離した・離し遅れ）は押した場面ではないので、受付も始めない
+			StopHold(LaneIndex);
+		}
+		else
+		{
+			// 通常ノーツ・始点のミス：MissPressWindow 秒以内にこのレーンを押したら、ミスのエフェクトを出す
+			MissPressDeadlines.Add(LaneIndex, GetWorld()->GetTimeSeconds() + MissPressWindow);
+		}
+		return;
+	}
+
 	const FRhythmLaneEffects* Effects = FindLaneEffects(LaneIndex);
 
 	// 判定エフェクト（通常・始点・終点共通）
