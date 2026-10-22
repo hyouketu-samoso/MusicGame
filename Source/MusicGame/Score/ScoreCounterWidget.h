@@ -4,7 +4,8 @@
 //  動き : ・変わった桁だけ、少し下がって薄くなり、入れ替わって、上から戻ってくる
 //         ・「+100」のような加算分 : 数字の裏から右に滑り出て、しばらくしたら消える
 //  使い方 : SetScore(今のスコア) を呼ぶだけ(増えた分は、自分で計算する)
-//  画像 : コンボと同じ T_ComboNum_0?9 と、「+」の画像 T_ComboNum_Plus を使う
+//  表示 : 0.00 ? 100.00 を「000.00」の形で出す(整数3桁 + 小数点 + 小数2桁)
+//  画像 : コンボと同じ T_ComboNum_0?9 と、「+」の画像 T_ComboNum_Plus、小数点の T_ComboNum_Dot を使う
 //  注意 : UWidget に「Slot」というメンバーがあるので、変数名に Slot は使わない
 // ============================================================
 #pragma once
@@ -39,11 +40,11 @@ class MUSICGAME_API UScoreCounterWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	// 今のスコアを渡す
-	//  ・増えたとき : 変わった桁が動いて、増えた分(+100 など)が出る
+	// 今のスコアを渡す(0.00 ? 100.00。範囲の外は、0 と 100 で止まる)
+	//  ・増えたとき : 変わった桁が動いて、増えた分(+1.00 など)が出る
 	//  ・減ったとき : 動かさずに、すぐ切り替える(増えた分は出さない)
 	UFUNCTION(BlueprintCallable, Category = "Score")
-	void SetScore(int32 Score);
+	void SetScore(float Score);
 
 protected:
 	virtual void NativeConstruct() override;
@@ -61,9 +62,21 @@ protected:
 
 	// ---- 調整値 ----
 
-	// スコアの桁数(5 なら「00123」。これより大きい値は、99999 で止まる)
+	// 小数点の画像(「.」。空のときは、小数点なしで数字だけを出す)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Score")
+	TObjectPtr<UTexture2D> DotTexture;
+
+	// スコアの全部の桁数(整数3桁 + 小数2桁 = 5。「000.00」)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Score")
 	int32 NumDigits = 5;
+
+	// そのうち、小数点より左(整数)の桁数(3 なら、左から3桁目のあとに小数点が入る)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Score")
+	int32 IntDigits = 3;
+
+	// 小数点1つの大きさ(数字の半分の幅)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Score")
+	FVector2D DotSize = FVector2D(20.0f, 60.0f);
 
 	// スコア1桁の大きさ(画像の比率 2:3 に合わせる)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Score")
@@ -108,18 +121,19 @@ private:
 	void BuildScoreSlots();
 
 	// スコアを、桁ごとに、画像にセットする(bAnimate が true のときは、変わった桁だけ動かす)
-	void ApplyScore(int32 Score, bool bAnimate);
+	//  Hundredths: スコアを100倍した整数(例: 12.34 → 1234)
+	void ApplyScore(int32 Hundredths, bool bAnimate);
 
 	// 桁に、数字の画像をセットして、動きを始める
 	void ShowDigit(FScoreDigitSlot& DigitSlot, int32 NewDigit, bool bAnimate);
 
-	// 加算分の画像(+ と数字)を作り直す
+	// 加算分の画像(+ と数字と小数点)を作り直す(Delta は100倍した整数。例: 100 → 「+1.00」)
 	void BuildGainImages(int32 Delta);
 
 	// 加算分を消す
 	void HideGain();
 
-	// 数字(0?9)の画像を返す(無いときは nullptr)
+	// 数字(0~9)の画像を返す(無いときは nullptr)
 	UTexture2D* GetDigitTexture(int32 Digit) const;
 
 	// 大きさを決めた枠の中に、画像を1枚入れた部品を作る(加算分用)
@@ -128,7 +142,7 @@ private:
 	UPROPERTY()
 	TArray<FScoreDigitSlot> DigitSlots;   // 左から右の順(最後が1の位)
 
-	int32 CurrentScore = 0;       // 最後に受け取ったスコア
+	int32 CurrentScore = 0;       // 最後に受け取ったスコア(100倍した整数)
 	bool  bInitialized = false;   // 最初の SetScore のときは、動かさない
 
 	// 加算分の動き

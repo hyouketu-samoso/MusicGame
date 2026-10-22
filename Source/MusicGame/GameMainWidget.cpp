@@ -45,14 +45,14 @@ void UGameMainWidget::NativeConstruct()
 			}), 0.4f, true);
 	}
 
-	// 【確認用・あとで消す】0.8秒ごとにスコアを100ずつ増やす
+	// 【確認用・あとで消す】0.7秒ごとにスコアを3.5ずつ増やす(0.00?100.00 で止まる)
 	{
-		static int32 TestScore = 0;
-		TestScore = 0;
+		static float TestScore = 0.0f;
+		TestScore = 0.0f;
 		FTimerHandle TestScoreHandle;
 		GetWorld()->GetTimerManager().SetTimer(TestScoreHandle, FTimerDelegate::CreateWeakLambda(this, [this]()
 			{
-				TestScore += 100;
+				TestScore += 3.5f;
 				SetScore(TestScore);
 			}), 0.7f, true);
 	}
@@ -78,7 +78,7 @@ void UGameMainWidget::StopVideos()
 	if (Player2) { Player2->Close(); }
 }
 
-void UGameMainWidget::SetScore(int32 Score)
+void UGameMainWidget::SetScore(float Score)
 {
 	// 動きのあるスコア
 	if (ScoreCounter)
@@ -86,11 +86,11 @@ void UGameMainWidget::SetScore(int32 Score)
 		ScoreCounter->SetScore(Score);
 	}
 
-	// 古い文字のスコア(WBP に残っているときだけ)
+	// 古い文字のスコア(WBP に残っているときだけ。0.00?100.00 を「000.00」の形で出す)
 	if (ScoreText)
 	{
 		ScoreText->SetText(FText::FromString(
-			FString::Printf(TEXT("%05d"), FMath::Max(0, Score))));
+			FString::Printf(TEXT("%06.2f"), FMath::Clamp(Score, 0.0f, 100.0f))));
 	}
 }
 
