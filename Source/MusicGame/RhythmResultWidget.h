@@ -247,6 +247,13 @@ private:
 	UFUNCTION() void HandleRetry();
 	UFUNCTION() void HandleTitle();
 
+	// マウスを乗せたとき(選択を、そのボタンに移す)
+	UFUNCTION() void HandleRetryHovered();
+	UFUNCTION() void HandleTitleHovered();
+
+	// 選択を動かす(Direction: -1 = 前 / +1 = 次。端で止まる)
+	void MoveSelection(int32 Direction);
+
 	// 部品が1つでも足りないと false(足りないときは、クラッシュさせずにログを出す)
 	bool HasAllParts() const;
 
@@ -267,10 +274,10 @@ private:
 	//  画像が出せたら true(Text は隠す)/ 出せないとき(入れ物か画像が無い)は false(Text に Fallback を出す)
 	bool ShowNumber(UHorizontalBox* Box, UTextBlock* Text, const FString& Digits, const FVector2D& Size, const FString& FallbackText);
 
-	// ゲームパッド操作の準備(UI 操作に切り替えて、リトライにフォーカスを置く)
+	// ゲームパッド操作の準備(UI 操作に切り替える。選択はコードで管理するので、ボタンにはフォーカスしない)
 	void SetupGamepadFocus();
 
-	// 選んでいるボタンの見た目を、フォーカスに合わせて更新する
+	// 選んでいるボタンの見た目を、SelectedIndex に合わせて更新する
 	void UpdateFocusVisual();
 
 	// このウィジェットが変えた入力モードを、ゲーム操作に戻す
@@ -279,7 +286,8 @@ private:
 	bool bFocusSetup = false;          // ゲームパッド操作の準備をしたか
 	bool bInputModeChanged = false;    // 入力モードを変えたか(戻すときの目印)
 	bool bPrevShowCursor = false;      // 変える前の、マウスカーソルの表示
-	int32 LastFocusIndex = -2;         // 前回のフォーカス(0=リトライ / 1=タイトル / -1=なし / -2=未設定)
+	int32 LastFocusIndex = -2;         // 前回、見た目に反映した選択(-2 = 未設定)
+	int32 SelectedIndex = 0;           // いま選んでいるボタン(0=リトライ / 1=タイトル)
 
 	// どのボタンが押されたか(フェードアウトが終わるまで覚えておく)
 	enum class EPendingAction : uint8

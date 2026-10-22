@@ -21,6 +21,25 @@
 #include "Engine/GameInstance.h"
 #include "InputCoreTypes.h"   // EKeys(ゲームパッドのボタン名)
 #include "GameSessionSubsystem.h"
+#include "UObject/UnrealType.h"
+
+// ボタンを「フォーカスしない」にする(UE標準の青い枠線が出なくなる)
+// (エンジンのバージョンでプロパティ名が違っても動くよう、名前で探して設定する)
+static void SetResultButtonNotFocusable(UButton* Button)
+{
+	if (!Button)
+	{
+		return;
+	}
+	for (const TCHAR* Name : { TEXT("IsFocusable"), TEXT("bIsFocusable") })
+	{
+		if (FBoolProperty* Prop = FindFProperty<FBoolProperty>(UButton::StaticClass(), Name))
+		{
+			Prop->SetPropertyValue_InContainer(Button, false);
+			return;
+		}
+	}
+}
 
 // このファイルの中だけで使う小さな補助関数
 namespace
@@ -68,6 +87,16 @@ void URhythmResultWidget::NativeConstruct()
 	// (AddDynamic で登録する関数には、ヘッダーで UFUNCTION が必要)
 	RetryButton->OnClicked.AddDynamic(this, &URhythmResultWidget::HandleRetry);
 	TitleButton->OnClicked.AddDynamic(this, &URhythmResultWidget::HandleTitle);
+
+	// マウスを乗せたら、選択がそのボタンに移る
+	RetryButton->OnHovered.AddDynamic(this, &URhythmResultWidget::HandleRetryHovered);
+	TitleButton->OnHovered.AddDynamic(this, &URhythmResultWidget::HandleTitleHovered);
+
+	// ボタンはフォーカスさせない(青い枠線を出さない)。選択は、コードで管理する
+	SetResultButtonNotFocusable(RetryButton);
+	SetResultButtonNotFocusable(TitleButton);
+	SetIsFocusable(true);   // 代わりに、このウィジェット自身がキー入力を受け取る
+	SelectedIndex = 0;
 
 	// 表示のはじまりは透明にして、NativeTick でだんだん見えるようにする
 	State = EState::FadingIn;
@@ -142,7 +171,7 @@ void URhythmResultWidget::ShowImageOrText(UImage* Image, UTexture2D* Texture, UT
 
 // ゲームパッド操作の準備
 //  ・入力を、UI 操作に切り替える(ゲーム操作のままだと、十字キーや×ボタンが、ボタンに届かない)
-//  ・リトライのボタンに、フォーカスを置く
+//  ・ボタンにはフォーカスを置かない(選択は SelectedIndex で管理)
 void URhythmResultWidget::SetupGamepadFocus()
 {
 	bFocusSetup = true;
@@ -157,12 +186,10 @@ void URhythmResultWidget::SetupGamepadFocus()
 	bPrevShowCursor = PC->bShowMouseCursor;
 
 	FInputModeUIOnly Mode;
-	Mode.SetWidgetToFocus(RetryButton->TakeWidget());
+	Mode.SetWidgetToFocus(TakeWidget());   // ボタンではなく、このウィジェット自身に入力を集める
 	PC->SetInputMode(Mode);
 	PC->bShowMouseCursor = true;   // マウスでも押せるようにする
 	bInputModeChanged = true;
-
-	RetryButton->SetUserFocus(PC);
 }
 
 // このウィジェットが変えた入力モードを、ゲーム操作に戻す(変えていないときは、何もしない)
@@ -182,7 +209,7 @@ void URhythmResultWidget::RestoreInputMode()
 }
 
 // 選んでいるボタンを、大きく・色を変えて見せる(どちらが選ばれているか分かるように)
-// 十字キー・左スティックの移動と、×ボタンの決定は、UMG の標準の動きに任せている
+// 十字キー・左スティックの移動と、○ボタンの決定は、NativeOnPreviewKeyDown で処理している
 void URhythmResultWidget::UpdateFocusVisual()
 {
 	if (!RetryButton || !TitleButton)
@@ -190,9 +217,9 @@ void URhythmResultWidget::UpdateFocusVisual()
 		return;
 	}
 
-	const bool bRetryFocus = RetryButton->HasAnyUserFocus();
-	const bool bTitleFocus = TitleButton->HasAnyUserFocus();
-	const int32 FocusIndex = bRetryFocus ? 0 : (bTitleFocus ? 1 : -1);
+	const bool bRetryFocus = (SelectedIndex == 0);
+	const bool bTitleFocus = (SelectedIndex == 1);
+	const int32 FocusIndex = SelectedIndex;
 
 	// 変わったときだけ、見た目を更新する(毎フレーム触ると、無駄に描き直しになる)
 	if (FocusIndex != LastFocusIndex)
@@ -208,15 +235,17 @@ void URhythmResultWidget::UpdateFocusVisual()
 		Apply(TitleButton, bTitleFocus);
 	}
 
-	// どちらにもフォーカスが無いとき(画面の何も無い所を、クリックしたときなど)は、リトライに戻す
-	if (FocusIndex == -1 && State == EState::Shown)
-	{
-		if (APlayerController* PC = GetOwningPlayer())
-		{
-			RetryButton->SetUserFocus(PC);
-		}
-	}
 }
+
+// 選択を動かす(2つしかないので、端で止める)
+void URhythmResultWidget::MoveSelection(int32 Direction)
+{
+	SelectedIndex = FMath::Clamp(SelectedIndex + Direction, 0, 1);
+}
+
+// マウスを乗せたとき
+void URhythmResultWidget::HandleRetryHovered() { SelectedIndex = 0; }
+void URhythmResultWidget::HandleTitleHovered() { SelectedIndex = 1; }
 
 // 毎フレーム呼ばれる。フェードの進み具合をここで更新する
 void URhythmResultWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -468,15 +497,31 @@ FReply URhythmResultWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry, 
 {
 	const FKey Key = InKeyEvent.GetKey();
 
-	if (Key == EKeys::Gamepad_FaceButton_Right)   // ○
+	// 選択の移動: 十字キー・左スティックの左右/上下、キーボードの矢印
+	if (Key == EKeys::Gamepad_DPad_Left || Key == EKeys::Gamepad_LeftStick_Left
+		|| Key == EKeys::Gamepad_DPad_Up || Key == EKeys::Gamepad_LeftStick_Up
+		|| Key == EKeys::Left || Key == EKeys::Up)
+	{
+		MoveSelection(-1);
+		return FReply::Handled();
+	}
+	if (Key == EKeys::Gamepad_DPad_Right || Key == EKeys::Gamepad_LeftStick_Right
+		|| Key == EKeys::Gamepad_DPad_Down || Key == EKeys::Gamepad_LeftStick_Down
+		|| Key == EKeys::Right || Key == EKeys::Down)
+	{
+		MoveSelection(+1);
+		return FReply::Handled();
+	}
+
+	if (Key == EKeys::Gamepad_FaceButton_Right || Key == EKeys::Enter)   // ○ / Enter
 	{
 		if (State == EState::Shown && !InKeyEvent.IsRepeat() && RetryButton && TitleButton)
 		{
-			if (RetryButton->HasAnyUserFocus())
+			if (SelectedIndex == 0)
 			{
 				HandleRetry();
 			}
-			else if (TitleButton->HasAnyUserFocus())
+			else
 			{
 				HandleTitle();
 			}
