@@ -46,7 +46,7 @@ public:
 	// 値を渡すだけで、画面の文字やゲージが変わる
 
 	UFUNCTION(BlueprintCallable, Category = "GameMain")
-	void SetScore(int32 Score);                  // 例: 1234 → 「01234」
+	void SetScore(float Score);                  // 例: 1234 → 「01234」
 
 	// 体力: 数字(HPText)とゲージ(HPBar)を更新する
 	// 例: SetHP(800, 1000) → 「体力:800」、ゲージは 80%

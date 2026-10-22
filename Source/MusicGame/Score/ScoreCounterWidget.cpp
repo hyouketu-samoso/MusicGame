@@ -36,7 +36,7 @@ void UScoreCounterWidget::NativeConstruct()
 	}
 
 	BuildScoreSlots();
-	ApplyScore(0, /*bAnimate=*/ false);   // 最初は「00000」を、動かさずに出す
+	ApplyScore(0, /*bAnimate=*/ false);   // 最初は「000.00」を、動かさずに出す
 	HideGain();
 }
 
@@ -87,18 +87,24 @@ void UScoreCounterWidget::BuildScoreSlots()
 		// 左から順に足していく(最初に足したものが、一番左になる)
 		ScoreContainer->AddChild(Box);
 		DigitSlots.Add(NewSlot);
+
+		// 整数の最後の桁のあとに、小数点を入れる(画像が無いときは入れない)
+		if (DotTexture && i == IntDigits - 1 && IntDigits < NumDigits)
+		{
+			ScoreContainer->AddChild(MakeFixedImage(DotTexture, DotSize));
+		}
 	}
 }
 
 // スコアを、桁ごとにセットする
-void UScoreCounterWidget::ApplyScore(int32 Score, bool bAnimate)
+void UScoreCounterWidget::ApplyScore(int32 Hundredths, bool bAnimate)
 {
 	if (DigitSlots.Num() == 0)
 	{
 		return;
 	}
 
-	// 桁数に収まる最大値(例: 5桁なら 99999)で止める
+	// 桁数に収まる最大値(例: 5桁なら 99999)で止める(実際は SetScore で 10000 = 100.00 までに収めてある)
 	int32 MaxScore = 1;
 	for (int32 i = 0; i < DigitSlots.Num(); ++i)
 	{
@@ -106,9 +112,9 @@ void UScoreCounterWidget::ApplyScore(int32 Score, bool bAnimate)
 	}
 	MaxScore -= 1;
 
-	FString Text = FString::FromInt(FMath::Clamp(Score, 0, MaxScore));
+	FString Text = FString::FromInt(FMath::Clamp(Hundredths, 0, MaxScore));
 
-	// ゼロ埋め(例: 123 → 「00123」)
+	// ゼロ埋め(例: 123 → 「00123」 = 「001.23」)
 	const int32 Pad = DigitSlots.Num() - Text.Len();
 	if (Pad > 0)
 	{
@@ -207,9 +213,20 @@ void UScoreCounterWidget::BuildGainImages(int32 Delta)
 		GainContainer->AddChild(MakeFixedImage(PlusTexture, GainDigitSize));
 	}
 
-	const FString Text = FString::FromInt(FMath::Max(0, Delta));
+	// 例: 100 → 「1.00」、35 → 「0.35」
+	const int32 D = FMath::Max(0, Delta);
+	const FString Text = FString::Printf(TEXT("%d.%02d"), D / 100, D % 100);
 	for (int32 i = 0; i < Text.Len(); ++i)
 	{
+		if (Text[i] == TEXT('.'))
+		{
+			// 小数点(画像が無いときは、飛ばす)
+			if (DotTexture)
+			{
+				GainContainer->AddChild(MakeFixedImage(DotTexture, FVector2D(GainDigitSize.X * 0.5, GainDigitSize.Y)));
+			}
+			continue;
+		}
 		const int32 Digit = Text[i] - TEXT('0');
 		GainContainer->AddChild(MakeFixedImage(GetDigitTexture(Digit), GainDigitSize));
 	}
@@ -225,12 +242,15 @@ void UScoreCounterWidget::HideGain()
 	}
 }
 
-void UScoreCounterWidget::SetScore(int32 Score)
+void UScoreCounterWidget::SetScore(float ScoreValue)
 {
 	if (DigitSlots.Num() == 0)
 	{
 		return;
 	}
+
+	// 0.00?100.00 に収めて、100倍した整数にする(小数の誤差を避けるため、四捨五入)
+	const int32 Score = FMath::RoundToInt(FMath::Clamp(ScoreValue, 0.0f, 100.0f) * 100.0f);
 
 	// 最初の1回は、動かさずに、そのまま出す
 	if (!bInitialized)
