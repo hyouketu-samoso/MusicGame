@@ -4,6 +4,7 @@
 #include "Components/AudioComponent.h"
 #include "Sound/SoundBase.h"
 #include "SongData.h"
+#include "TimerManager.h"
 
 ARhythmMusicPlayer::ARhythmMusicPlayer()
 {
@@ -98,6 +99,7 @@ void ARhythmMusicPlayer::SelectSongByIndex(int32 Index)
     );
 }
 
+
 void ARhythmMusicPlayer::PlayMusic()
 {
     if (!AudioComponent || !CurrentSongData)
@@ -123,17 +125,40 @@ void ARhythmMusicPlayer::PlayMusic()
         return;
     }
 
+    // 前の再生予約があればキャンセル
+    GetWorldTimerManager().ClearTimer(MusicStartTimerHandle);
+
     AudioComponent->Stop();
     AudioComponent->SetSound(Sound);
-    AudioComponent->Play();
+
+    // 指定した時間だけ待ってから再生
+    GetWorldTimerManager().SetTimer(
+        MusicStartTimerHandle,
+        [this]()
+        {
+            if (AudioComponent)
+            {
+                AudioComponent->Play();
+
+                UE_LOG(
+                    LogTemp,
+                    Warning,
+                    TEXT("[MusicPlayer] Music playback started")
+                );
+            }
+        },
+        FMath::Max(0.0f, MusicStartDelay),
+        false
+    );
 
     UE_LOG(
         LogTemp,
         Warning,
-        TEXT("[MusicPlayer] Now Playing: %s"),
+        TEXT("[MusicPlayer] Playback scheduled: %s"),
         *CurrentSongData->SongTitle.ToString()
     );
 }
+
 
 void ARhythmMusicPlayer::StopMusic()
 {
