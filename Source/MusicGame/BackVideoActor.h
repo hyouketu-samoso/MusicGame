@@ -52,6 +52,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Video")
 	FBackVideoSlot Slot2;
 
+	// ポーズ画面に入った・出た時に動画を止める/再開する
+	void PauseVideos();
+	void ResumeVideos();
+
 protected:
 	virtual void BeginPlay() override;
 

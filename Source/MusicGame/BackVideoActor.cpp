@@ -73,3 +73,15 @@ void ABackVideoActor::SetupSlot(UStaticMeshComponent* Mesh, const FBackVideoSlot
 		}
 	}
 }
+
+void ABackVideoActor::PauseVideos()
+{
+	if (Slot1.Player && Slot1.Player->IsPlaying()) { Slot1.Player->Pause(); }
+	if (Slot2.Player && Slot2.Player->IsPlaying()) { Slot2.Player->Pause(); }
+}
+
+void ABackVideoActor::ResumeVideos()
+{
+	if (Slot1.Player && Slot1.Player->IsPaused()) { Slot1.Player->Play(); }
+	if (Slot2.Player && Slot2.Player->IsPaused()) { Slot2.Player->Play(); }
+}
