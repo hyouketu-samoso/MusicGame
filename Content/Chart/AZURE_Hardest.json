@@ -184,14 +184,14 @@
   {
     "time": 11.029406,
     "type": "note_on",
-    "note": 64,
-    "lane": 4,
+    "note": 63,
+    "lane": 3,
     "velocity": 80
   },
   {
     "time": 11.074259,
     "type": "note_off",
-    "note": 64,
+    "note": 63,
     "velocity": 0
   },
   {
@@ -210,14 +210,14 @@
   {
     "time": 11.205877,
     "type": "note_on",
-    "note": 64,
-    "lane": 4,
+    "note": 63,
+    "lane": 3,
     "velocity": 80
   },
   {
     "time": 11.25073,
     "type": "note_off",
-    "note": 64,
+    "note": 63,
     "velocity": 0
   },
   {
@@ -8008,19 +8008,6 @@
     "velocity": 0
   },
   {
-    "time": 109.852886,
-    "type": "note_on",
-    "note": 63,
-    "lane": 3,
-    "velocity": 80
-  },
-  {
-    "time": 109.897739,
-    "type": "note_off",
-    "note": 63,
-    "velocity": 0
-  },
-  {
     "time": 109.941122,
     "type": "note_on",
     "note": 60,
@@ -8036,14 +8023,14 @@
   {
     "time": 110.029357,
     "type": "note_on",
-    "note": 61,
-    "lane": 1,
+    "note": 62,
+    "lane": 2,
     "velocity": 80
   },
   {
     "time": 110.07421,
     "type": "note_off",
-    "note": 61,
+    "note": 62,
     "velocity": 0
   },
   {

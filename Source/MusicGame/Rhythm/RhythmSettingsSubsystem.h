@@ -113,6 +113,68 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Rhythm Settings")
 	FOnInputOffsetChanged OnInputOffsetChanged;
 
+	// デッドゾーン
+	UFUNCTION(BlueprintCallable, Category = "Settings|Input")
+	float GetDeadZone() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Settings|Input")
+	void SetDeadZone(float NewDeadZone);
+
+	// 感度
+	UFUNCTION(BlueprintCallable, Category = "Settings|Input")
+	int32 GetSensitivityLevel() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Settings|Input")
+	void SetSensitivityLevel(int32 NewLevel);
+
+	// 振動
+	UFUNCTION(BlueprintCallable, Category = "Settings|Input")
+	bool GetVibrationEnabled() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Settings|Input")
+	void SetVibrationEnabled(bool bEnabled);
+
+	// マスター音量
+	UFUNCTION(BlueprintCallable, Category = "Settings|Audio")
+	int32 GetMasterVolumeLevel() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Settings|Audio")
+	void SetMasterVolumeLevel(int32 NewLevel);
+
+	// BGM音量
+	UFUNCTION(BlueprintCallable, Category = "Settings|Audio")
+	int32 GetBGMVolumeLevel() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Settings|Audio")
+	void SetBGMVolumeLevel(int32 NewLevel);
+
+	// SE音量
+	UFUNCTION(BlueprintCallable, Category = "Settings|Audio")
+	int32 GetSEVolumeLevel() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Settings|Audio")
+	void SetSEVolumeLevel(int32 NewLevel);
+
+	// 背景の明るさ
+	UFUNCTION(BlueprintCallable, Category = "Settings|Brightness")
+	int32 GetBGBrightnessStep() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Settings|Brightness")
+	void SetBGBrightnessStep(int32 NewStep);
+
+	// レーンの明るさ
+	UFUNCTION(BlueprintCallable, Category = "Settings|Brightness")
+	int32 GetLaneBrightnessStep() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Settings|Brightness")
+	void SetLaneBrightnessStep(int32 NewStep);
+
+	// ノーツの明るさ
+	UFUNCTION(BlueprintCallable, Category = "Settings|Brightness")
+	int32 GetNoteBrightnessStep() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Settings|Brightness")
+	void SetNoteBrightnessStep(int32 NewStep);
 private:
 
 	// セーブデータへの書き込み・読み込み
@@ -124,4 +186,34 @@ private:
 	ERhythmDifficulty Difficulty = ERhythmDifficulty::Normal;
 
 	int32 InputOffsetMs = 0;
+
+	// 入力設定
+	UPROPERTY()
+	float DeadZone = 0.20f;
+
+	UPROPERTY()
+	int32 SensitivityLevel = 3;
+
+	UPROPERTY()
+	bool bVibration = true;
+
+	// 音量設定
+	UPROPERTY()
+	int32 MasterVolumeLevel = 100;
+
+	UPROPERTY()
+	int32 BGMVolumeLevel = 100;
+
+	UPROPERTY()
+	int32 SEVolumeLevel = 100;
+
+	// 明るさ設定（0～10）
+	UPROPERTY()
+	int32 BGBrightnessStep = 5;
+
+	UPROPERTY()
+	int32 LaneBrightnessStep = 5;
+
+	UPROPERTY()
+	int32 NoteBrightnessStep = 5;
 };

@@ -1,7 +1,9 @@
 ﻿#pragma once
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
+#include "Rhythm/RhythmTypes.h"
 #include "RhythmSettingsSaveGame.generated.h"
+
 
 UCLASS()
 class MUSICGAME_API URhythmSettingsSaveGame : public USaveGame
@@ -14,6 +16,9 @@ public:
 	UPROPERTY() int32 BGMVolumeLevel = 100;
 	UPROPERTY() int32 SEVolumeLevel = 100;
 	UPROPERTY() int32 MasterVolumeLevel = 100;
+	UPROPERTY() int32 NoteSpeedLevel = 3;
+	UPROPERTY() int32 InputOffsetMs = 0;
+	UPROPERTY() ERhythmDifficulty Difficulty = ERhythmDifficulty::Normal;
 	// 明るさ(0〜10の段階。5が標準)。古い保存データには無いので、読み込み時は5になる
 	UPROPERTY() int32 BGBrightnessStep = 5;
 	UPROPERTY() int32 LaneBrightnessStep = 5;
