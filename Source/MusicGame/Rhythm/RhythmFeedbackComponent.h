@@ -88,7 +88,8 @@ struct FRhythmLaneEffects
 	bool bFlipSide = false;
 
 	// 画面上の傾き（度）。エフェクトはカメラの方を向いた板なので、カメラの方向を軸に傾けて
-	// 斜めの判定枠（NoteSpawner の LaneTargetYaws）と同じ向きに見せる。マイナスで左側が上がる
+	// 斜めの判定枠（NoteSpawner の LaneTargetYaws）と同じ向きに見せる。マイナスで左側が上がる。
+	// ※ 外側2レーンの初期値は ∓35 度（アセット自体も斜め）。カメラを向く粒（フレアなど）は傾かないので注意
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm", meta=(Units="deg"))
 	float ScreenTilt = 0.0f;
 

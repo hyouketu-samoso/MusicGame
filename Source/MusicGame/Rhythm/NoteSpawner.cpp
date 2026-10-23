@@ -8,8 +8,11 @@
 #include "RhythmGameSettings.h"
 #include "RhythmFeedbackComponent.h"
 #include "RhythmGameFlowComponent.h"
+#include "RhythmHUDSyncComponent.h"
 #include "RhythmScoreComponent.h"
 #include "Engine/GameInstance.h"
+#include "Engine/Texture2D.h"
+#include "UObject/ConstructorHelpers.h"
 
 #include "Camera/CameraComponent.h"
 #include "Components/ArrowComponent.h"
@@ -82,6 +85,16 @@ ANoteSpawner::ANoteSpawner()
 	GameFlow =
 		CreateDefaultSubobject<URhythmGameFlowComponent>(
 			TEXT("GameFlow")
+		);
+
+
+	// ========================================================
+	// HUDSync（プレイ画面の UI に実際の値を渡す）
+	// ========================================================
+
+	HUDSync =
+		CreateDefaultSubobject<URhythmHUDSyncComponent>(
+			TEXT("HUDSync")
 		);
 
 
@@ -192,6 +205,26 @@ ANoteSpawner::ANoteSpawner()
 		1.0f,
 		1.5f
 	};
+
+
+	// ========================================================
+	// 4 Lane Note Textures（デザイナーのノーツ画像）
+	//
+	// 左レーン（ピンク・赤）と右レーン（青・シアン）で六角形の斜めの向きが逆
+	// ========================================================
+
+	static ConstructorHelpers::FObjectFinder<UTexture2D> PinkTexture(TEXT("/Game/MusicGame/Textures_P/Texture_Yoshida/T_Note_Pink.T_Note_Pink"));
+	static ConstructorHelpers::FObjectFinder<UTexture2D> RedTexture(TEXT("/Game/MusicGame/Textures_P/Texture_Yoshida/T_Note_Red.T_Note_Red"));
+	static ConstructorHelpers::FObjectFinder<UTexture2D> BlueTexture(TEXT("/Game/MusicGame/Textures_P/Texture_Yoshida/T_Note_Blue.T_Note_Blue"));
+	static ConstructorHelpers::FObjectFinder<UTexture2D> CyanTexture(TEXT("/Game/MusicGame/Textures_P/Texture_Yoshida/T_Note_Cyan.T_Note_Cyan"));
+
+	LaneNoteTextures =
+	{
+		PinkTexture.Object,   // レーン1 左外側：ピンク
+		RedTexture.Object,    // レーン2 左内側：赤
+		BlueTexture.Object,   // レーン3 右内側：青
+		CyanTexture.Object    // レーン4 右外側：シアン
+	};
 }
 
 
@@ -253,6 +286,12 @@ void ANoteSpawner::BeginPlay()
 	if (GameFlow && Judge)
 	{
 		GameFlow->BindJudge(Judge);
+	}
+
+	// スコア・コンボ・体力・判定の文字を UI に渡す
+	if (HUDSync && Judge)
+	{
+		HUDSync->BindJudge(Judge);
 	}
 
 
@@ -1291,6 +1330,12 @@ void ANoteSpawner::SpawnNoteInternal(
 		GetLaneNoteScale(LaneIndex)
 	);
 
+	// レーンごとのノーツ画像（空なら六角形の板）
+	Note->SetNoteTexture(
+		GetLaneNoteTexture(LaneIndex),
+		IsRightLane(LaneIndex)
+	);
+
 	Note->Launch(
 		StartPos,
 		GetLaneTarget(LaneIndex),
@@ -1447,6 +1492,29 @@ float ANoteSpawner::GetLaneNoteScale(
 
 
 // ============================================================
+// Get Lane Note Texture
+// ============================================================
+
+UTexture2D* ANoteSpawner::GetLaneNoteTexture(
+	int32 LaneIndex
+) const
+{
+	return LaneNoteTextures.IsValidIndex(LaneIndex)
+		? LaneNoteTextures[LaneIndex].Get()
+		: nullptr;
+}
+
+
+bool ANoteSpawner::IsRightLane(
+	int32 LaneIndex
+) const
+{
+	// 4レーンなら 0・1 が左、2・3 が右
+	return LaneIndex >= LaneColors.Num() / 2;
+}
+
+
+// ============================================================
 // Get Lane Target
 // ============================================================
 
@@ -1505,10 +1573,12 @@ void ANoteSpawner::DrawJudgeLine() const
 	// ノーツがこの枠にぴったり重なった瞬間がパーフェクト
 	const ANoteActor* NoteDefaults = NoteClass ? NoteClass->GetDefaultObject<ANoteActor>() : GetDefault<ANoteActor>();
 	TArray<FVector> Outline;
-	NoteDefaults->GetPlateOutline(Outline);
 
 	for (int32 Lane = 0; Lane < LaneNum; ++Lane)
 	{
+		// 画像のノーツなら画像の斜めの六角形（右レーンは左右反転）、そうでなければ六角形の板の形
+		NoteDefaults->GetTexturePlateOutline(GetLaneNoteTexture(Lane), IsRightLane(Lane), Outline);
+
 		// 判定枠もノーツが届いたときと同じ向きにする
 		const FQuat Rotation = GetActorQuat() * FRotator(0.0f, GetLaneTargetYaw(Lane), 0.0f).Quaternion();
 		const FVector Center = GetLaneTarget(Lane);

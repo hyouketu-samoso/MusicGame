@@ -13,6 +13,7 @@ class UStaticMeshComponent;
 class UProceduralMeshComponent;
 class UMaterialInterface;
 class UMeshComponent;
+class UTexture2D;
 
 UCLASS()
 class ANoteActor : public AActor
@@ -40,6 +41,15 @@ public:
 
 	// ノーツの大きさ（倍率）。Launch より前に呼ぶ。遠くて小さく見えるレーンを大きくするのに使う
 	void SetNoteScale(float InScale) { NoteScale = FMath::Max(InScale, 0.01f); }
+
+	// ノーツの画像（デザイナーのノーツ画像）。Launch より前に呼ぶ。
+	// 設定すると、六角形の板の代わりに画像を貼った板で表示する（Mesh にモデルがあるときはモデル優先）
+	// bRightSide = 右レーン用（画像の六角形は右レーン用が左右反転の形。厚みの側面をその形に合わせる）
+	void SetNoteTexture(UTexture2D* InTexture, bool bRightSide) { NoteTexture = InTexture; bTextureRightSide = bRightSide; }
+
+	// 画像の板で表示したときの、画像の中の六角形の輪郭（Actor 基準、判定枠の表示用）
+	// bRightSide = 右レーン用（画像の六角形は右レーン用が左右反転の形）
+	void GetTexturePlateOutline(const UTexture2D* InTexture, bool bRightSide, TArray<FVector>& OutPoints) const;
 
 	virtual void Tick(float DeltaTime) override;
 
@@ -104,6 +114,42 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category="Note|Shape", meta=(ClampMin=-90.0, ClampMax=90.0, Units="deg"))
 	float PlateTilt = 0.0f;
 
+	// 出現したときの傾き（度）。遠くでは板をカメラ側へ起こして見やすくし、判定地点に着くまでに PlateTilt まで寝かせる。
+	// カメラは低い角度から見ているので、寝かせたままだと遠くのノーツは真横から見た細い線になる
+	UPROPERTY(EditDefaultsOnly, Category="Note|Shape", meta=(ClampMin=-90.0, ClampMax=90.0, Units="deg"))
+	float StartTilt = 60.0f;
+
+	// 経過時間の割合 T（0〜）での板の傾き（度）。T = 0 で StartTilt、T >= 1 で PlateTilt
+	float CalcTilt(float T) const;
+
+	// ---------- 画像のノーツ（SetNoteTexture したとき） ----------
+
+	// 画像を貼るマテリアル。初期値は Paper2D の TranslucentUnlitSpriteMaterial（透明部分を抜いて光らせずにそのまま表示）
+	UPROPERTY(EditDefaultsOnly, Category="Note|Texture")
+	TObjectPtr<UMaterialInterface> NoteTextureMaterial;
+
+	// 上のマテリアルの、画像を入れる Texture パラメータ名（TranslucentUnlitSpriteMaterial は SpriteTexture）
+	UPROPERTY(EditDefaultsOnly, Category="Note|Texture")
+	FName NoteTextureParameterName = TEXT("SpriteTexture");
+
+	// 画像の横幅のうち、六角形が占める割合。六角形の幅が PlateWidth になるように板を大きくする
+	UPROPERTY(EditDefaultsOnly, Category="Note|Texture", meta=(ClampMin=0.01, ClampMax=1.0))
+	float TextureHexWidthRatio = 0.57f;
+
+	// 画像の高さのうち、六角形が占める割合（判定枠の奥行きに使う）
+	UPROPERTY(EditDefaultsOnly, Category="Note|Texture", meta=(ClampMin=0.01, ClampMax=1.0))
+	float TextureHexHeightRatio = 0.802f;
+
+	// 画像のノーツの厚み（cm）。画像の六角形の形に沿って、レーン色の側面をつける（0 で厚みなし）
+	UPROPERTY(EditDefaultsOnly, Category="Note|Texture", meta=(ClampMin=0.0, Units="cm"))
+	float TextureThickness = 8.0f;
+
+	// 画像の板を作る（ホールドは終点にも作るので上書きする）
+	virtual void SetupTextureVisual();
+
+	// 画像の板を Target に作って、画像を貼る
+	void BuildTexturePlate(UProceduralMeshComponent* Target) const;
+
 	// 判定地点を通り過ぎてから消えるまでの割合（1.0 = 判定地点、1.3 = 少し通り過ぎた所）
 	UPROPERTY(EditAnywhere, Category="Note", meta=(ClampMin=1.0))
 	float DestroyProgress = 1.3f;
@@ -132,6 +178,13 @@ protected:
 
 	// ノーツの大きさ（倍率）
 	float NoteScale = 1.0f;
+
+	// ノーツの画像（空なら六角形の板）
+	UPROPERTY()
+	TObjectPtr<UTexture2D> NoteTexture;
+
+	// 右レーン用の画像か（六角形の形が左右反転）
+	bool bTextureRightSide = false;
 
 	bool bWaitForJudge = false;
 

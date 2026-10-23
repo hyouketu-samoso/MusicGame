@@ -2,7 +2,7 @@
 //
 // ・曲の終わり : 譜面の時間が曲の長さを過ぎた、かつ譜面の判定がすべて終わった
 //               → スコアの FinishSong → ResultDelay 秒後にリザルト画面（RhythmResultWidget）
-// ・ゲームオーバー : スコアの OnGameOver → RetryDelay 秒後にリトライ画面（UI 担当の Widget）
+// ・ゲームオーバー : スコアの OnGameOver → RetryDelay 秒後にリトライ画面（WBP_GameOver。BGM は画面が出るまで鳴らす）
 //
 // 曲の長さは「SongSoundOverride → 選択中の曲（RhythmMusicPlayer の SongData）の BGM の長さ
 // → 最後のノーツ + EndMarginAfterLastNote 秒」の順に決める。
@@ -68,11 +68,12 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Widget")
 	TSubclassOf<URhythmResultWidget> ResultWidgetClass;
 
-	// リトライ画面（UI 担当が作る Widget）。空のときは OnRetryScreenRequested を出すだけ
+	// リトライ（ゲームオーバー）画面。初期値は WBP_GameOver。空のときは OnRetryScreenRequested を出すだけ。
+	// UGameOverWidget なら Open() を呼ぶ（画面に出す・ポーズ・BGM 停止・入力の切り替えは画面が行う）
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Widget")
 	TSubclassOf<UUserWidget> RetryWidgetClass;
 
-	// リトライ画面を出している間、ゲームを止める（リザルト画面は自分で止める）
+	// リトライ画面を出している間、ゲームを止める（UGameOverWidget 以外の画面のときだけ。リザルト画面は自分で止める）
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Widget")
 	bool bPauseWhileRetryShown = true;
 
@@ -86,9 +87,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Timing", meta=(ClampMin=0.0, Units="s"))
 	float RetryDelay = 1.5f;
 
-	// ゲームオーバーで BGM を止める（RhythmMusicPlayer::StopMusic）
+	// ゲームオーバーになった瞬間に BGM を止める（RhythmMusicPlayer::StopMusic）。
+	// false なら、リトライ画面が出るまで鳴らしておく（WBP_GameOver は開くときに BGM を止める）
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Timing")
-	bool bStopMusicOnGameOver = true;
+	bool bStopMusicOnGameOver = false;
 
 	// ---------- 曲の長さ ----------
 

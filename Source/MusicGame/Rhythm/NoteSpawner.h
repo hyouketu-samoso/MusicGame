@@ -18,8 +18,10 @@ class AHoldNoteActor;
 class ARhythmJudge;
 class URhythmFeedbackComponent;
 class URhythmGameFlowComponent;
+class URhythmHUDSyncComponent;
 class UCameraComponent;
 class UArrowComponent;
+class UTexture2D;
 
 
 // ============================================================
@@ -133,6 +135,20 @@ public:
     ) const;
 
 
+    // 指定レーンのノーツ画像（無ければ nullptr = 六角形の板）
+    UFUNCTION(BlueprintPure, Category = "Note Spawner")
+    UTexture2D* GetLaneNoteTexture(
+        int32 LaneIndex
+    ) const;
+
+
+    // 右側のレーンか（画像の六角形の向きが左右で逆）
+    UFUNCTION(BlueprintPure, Category = "Note Spawner")
+    bool IsRightLane(
+        int32 LaneIndex
+    ) const;
+
+
     // ========================================================
     // 譜面の進み具合（遷移の係 RhythmGameFlowComponent が曲の終わりを見るのに使う）
     // ========================================================
@@ -234,6 +250,15 @@ protected:
     URhythmGameFlowComponent* GameFlow = nullptr;
 
 
+    // プレイ画面の UI（スコア・コンボ・体力・判定の文字）に実際の値を渡す
+    UPROPERTY(
+        VisibleAnywhere,
+        BlueprintReadOnly,
+        Category = "Note Spawner|HUD"
+    )
+    URhythmHUDSyncComponent* HUDSync = nullptr;
+
+
     // ========================================================
     // Lane
     // ========================================================
@@ -272,6 +297,15 @@ protected:
         Category = "Note Spawner|Lane"
     )
     TArray<float> LaneNoteScales;
+
+
+    // ノーツの画像（要素番号 = レーン番号）。設定したレーンは、六角形の板の代わりに画像を貼った板で表示する。
+    // 判定枠も画像と同じ斜めの六角形で描く。空のレーンは今までどおり六角形の板
+    UPROPERTY(
+        EditAnywhere,
+        Category = "Note Spawner|Lane"
+    )
+    TArray<TObjectPtr<UTexture2D>> LaneNoteTextures;
 
 
     // 判定ラインにおける各レーンの位置（このActorからの相対位置、cm）

@@ -33,29 +33,6 @@ void UGameMainWidget::NativeConstruct()
 	{
 		JudgementText->SetVisibility(ESlateVisibility::Collapsed);
 	}
-
-	// yŠm”F—pE‚ ‚Æ‚ÅÁ‚·z0.4•b‚²‚Æ‚ÉƒRƒ“ƒ{‚ð‘‚â‚·
-	{
-		static int32 TestCombo = 0;
-		TestCombo = 0;
-		FTimerHandle TestHandle;
-		GetWorld()->GetTimerManager().SetTimer(TestHandle, FTimerDelegate::CreateWeakLambda(this, [this]()
-			{
-				SetCombo(++TestCombo);
-			}), 0.4f, true);
-	}
-
-	// yŠm”F—pE‚ ‚Æ‚ÅÁ‚·z0.7•b‚²‚Æ‚ÉƒXƒRƒA‚ð3.5‚¸‚Â‘‚â‚·(0.00?100.00 ‚ÅŽ~‚Ü‚é)
-	{
-		static float TestScore = 0.0f;
-		TestScore = 0.0f;
-		FTimerHandle TestScoreHandle;
-		GetWorld()->GetTimerManager().SetTimer(TestScoreHandle, FTimerDelegate::CreateWeakLambda(this, [this]()
-			{
-				TestScore += 3.5f;
-				SetScore(TestScore);
-			}), 0.7f, true);
-	}
 }
 
 void UGameMainWidget::PlayVideos()

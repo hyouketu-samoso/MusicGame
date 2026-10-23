@@ -108,9 +108,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Rhythm Judge|Window", meta=(ClampMin=0.0, Units="s"))
 	float BadWindow = 0.160f;
 
-	// 判定結果を画面左上に表示する（テスト用）
+	// 判定結果・スコア・体力を画面左上に表示する（テスト用。判定の文字は UI に出るので、ふだんはオフ）
 	UPROPERTY(EditAnywhere, Category="Rhythm Judge|Debug")
-	bool bShowDebugText = true;
+	bool bShowDebugText = false;
 
 private:
 
