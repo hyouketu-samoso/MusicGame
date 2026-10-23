@@ -77,9 +77,19 @@ void ARhythmPlayerController::BeginPlay()
 		}
 	}
 
-	if (IsLocalPlayerController() && BackVideoClass)
+	// 背景動画
+	if (IsLocalPlayerController())
 	{
-		BackVideo = GetWorld()->SpawnActor<ABackVideoActor>(BackVideoClass, BackVideoTransform);
+		if (BackVideoClass)
+		{
+			BackVideo = GetWorld()->SpawnActor<ABackVideoActor>(BackVideoClass, BackVideoTransform);
+		}
+		else
+		{
+			// スポーンしない設定のときは、レベルに置いてあるものを使う
+			BackVideo = Cast<ABackVideoActor>(
+				UGameplayStatics::GetActorOfClass(this, ABackVideoActor::StaticClass()));
+		}
 	}
 
 	// リトライで開き直したときは、曲選択を出さずに、前回の曲でそのまま始める
@@ -422,19 +432,26 @@ void ARhythmPlayerController::OpenPause()
 		UE_LOG(LogTemp, Warning, TEXT("PauseWidgetClass is not set. Set it in BP_RhythmPlayerController."));
 	}
 
-	// マウスカーソルを出して、UIも操作できるようにする
-	bShowMouseCursor = true;
+	// マウスカーソルは出さず、UIはパッド・キーボードで操作する
+	bShowMouseCursor = false;
 	FInputModeGameAndUI InputMode;
 	InputMode.SetHideCursorDuringCapture(false);
 	SetInputMode(InputMode);
 
 	SetPause(true);
+
+	// 背景動画を止める
+	if (BackVideo) { BackVideo->PauseVideos(); }
+
+	// 開いた直後は、押しっぱなしのキーで再開しないよう、少しの間ポーズ入力を無視する
+	PauseInputIgnoreUntil = FPlatformTime::Seconds() + 0.3;
+
 	bIsPaused = true;
 }
 
 void ARhythmPlayerController::ResumeGame()
 {
-	if (!bIsPaused)return;
+	if (!bIsPaused) return;
 
 	if (PauseWidget) {
 		PauseWidget->RemoveFromParent();
@@ -445,6 +462,13 @@ void ARhythmPlayerController::ResumeGame()
 	SetInputMode(FInputModeGameOnly());
 
 	SetPause(false);
+
+	// 背景動画を再開する
+	if (BackVideo) { BackVideo->ResumeVideos(); }
+
+	// 閉じた直後に、押しっぱなしでまた開かないようにする
+	PauseInputIgnoreUntil = FPlatformTime::Seconds() + 0.3;
+
 	bIsPaused = false;
 }
 
