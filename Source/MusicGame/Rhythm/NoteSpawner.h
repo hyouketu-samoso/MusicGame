@@ -21,6 +21,7 @@ class URhythmGameFlowComponent;
 class URhythmHUDSyncComponent;
 class UCameraComponent;
 class UArrowComponent;
+class UTexture2D;
 
 
 // ============================================================
@@ -130,6 +131,20 @@ public:
     // 指定レーンのノーツ・判定枠の大きさ（倍率）
     UFUNCTION(BlueprintPure, Category = "Note Spawner")
     float GetLaneNoteScale(
+        int32 LaneIndex
+    ) const;
+
+
+    // 指定レーンのノーツ画像（無ければ nullptr = 六角形の板）
+    UFUNCTION(BlueprintPure, Category = "Note Spawner")
+    UTexture2D* GetLaneNoteTexture(
+        int32 LaneIndex
+    ) const;
+
+
+    // 右側のレーンか（画像の六角形の向きが左右で逆）
+    UFUNCTION(BlueprintPure, Category = "Note Spawner")
+    bool IsRightLane(
         int32 LaneIndex
     ) const;
 
@@ -282,6 +297,15 @@ protected:
         Category = "Note Spawner|Lane"
     )
     TArray<float> LaneNoteScales;
+
+
+    // ノーツの画像（要素番号 = レーン番号）。設定したレーンは、六角形の板の代わりに画像を貼った板で表示する。
+    // 判定枠も画像と同じ斜めの六角形で描く。空のレーンは今までどおり六角形の板
+    UPROPERTY(
+        EditAnywhere,
+        Category = "Note Spawner|Lane"
+    )
+    TArray<TObjectPtr<UTexture2D>> LaneNoteTextures;
 
 
     // 判定ラインにおける各レーンの位置（このActorからの相対位置、cm）

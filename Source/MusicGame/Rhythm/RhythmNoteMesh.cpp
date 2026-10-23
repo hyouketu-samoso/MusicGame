@@ -90,3 +90,89 @@ void RhythmNoteMesh::BuildHexPlate(UProceduralMeshComponent* Target, float Width
 
 	Target->CreateMeshSection(0, Data.Vertices, Data.Triangles, Data.Normals, Data.UVs, {}, {}, false);
 }
+
+void RhythmNoteMesh::GetSlantedHexOutline(float Width, float Depth, bool bMirror, TArray<FVector>& OutPoints)
+{
+	// デザイナーのノーツ画像（左レーン用：WBP_LeftRedNotes）の白い縁の外形を、
+	// 六角形の幅・高さを 1 として読み取った値（左上・右上・右・右下・左下・左）。
+	// 上辺は左寄り、下辺は右寄りにずれた、左右の辺が斜めの六角形。右レーン用は左右反転
+	static const FVector2D Normalized[] =
+	{
+		FVector2D(-0.399f, -0.5f),
+		FVector2D( 0.239f, -0.5f),
+		FVector2D( 0.5f,    0.0f),
+		FVector2D( 0.399f,  0.5f),
+		FVector2D(-0.239f,  0.5f),
+		FVector2D(-0.5f,    0.0f),
+	};
+
+	OutPoints.Reset();
+	for (const FVector2D& N : Normalized)
+	{
+		// 画像の上 = 奥（X+）、画像の右 = Y+
+		const float U = bMirror ? -N.X : N.X;
+		OutPoints.Add(FVector(-N.Y * Depth, U * Width, 0.0f));
+	}
+}
+
+void RhythmNoteMesh::BuildTexturedQuad(UProceduralMeshComponent* Target, float Width, float Depth, float Height)
+{
+	if (!Target)
+	{
+		return;
+	}
+
+	// 画像の上 = 奥（X+）、画像の左 = Y-。上からも下からも見えるように表と裏を作る
+	const float HX = Depth * 0.5f;
+	const float HY = Width * 0.5f;
+	const FVector P00(HX, -HY, Height);   // 画像の左上
+	const FVector P10(HX, HY, Height);    // 右上
+	const FVector P11(-HX, HY, Height);   // 右下
+	const FVector P01(-HX, -HY, Height);  // 左下
+
+	FMeshData Data;
+	Data.AddTriangle(P00, P10, P11, FVector2D(0, 0), FVector2D(1, 0), FVector2D(1, 1), FVector::UpVector);
+	Data.AddTriangle(P00, P11, P01, FVector2D(0, 0), FVector2D(1, 1), FVector2D(0, 1), FVector::UpVector);
+	Data.AddTriangle(P00, P10, P11, FVector2D(0, 0), FVector2D(1, 0), FVector2D(1, 1), FVector::DownVector);
+	Data.AddTriangle(P00, P11, P01, FVector2D(0, 0), FVector2D(1, 1), FVector2D(0, 1), FVector::DownVector);
+
+	// スプライト用マテリアルは頂点カラーを掛けるので白にする
+	TArray<FColor> Colors;
+	Colors.Init(FColor::White, Data.Vertices.Num());
+
+	Target->ClearAllMeshSections();
+	Target->CreateMeshSection(0, Data.Vertices, Data.Triangles, Data.Normals, Data.UVs, Colors, {}, false);
+}
+
+void RhythmNoteMesh::BuildPrismSides(UProceduralMeshComponent* Target, int32 Section, const TArray<FVector>& Outline, float Bottom, float Top)
+{
+	const int32 Num = Outline.Num();
+	if (!Target || Num < 3)
+	{
+		return;
+	}
+
+	const FVector Down(0.0f, 0.0f, Bottom);
+	const FVector Up(0.0f, 0.0f, Top);
+
+	// 輪郭の中心から外へ向かう向きを、各辺の表側にする
+	FVector Center = FVector::ZeroVector;
+	for (const FVector& P : Outline)
+	{
+		Center += P;
+	}
+	Center /= static_cast<float>(Num);
+
+	FMeshData Data;
+	for (int32 i = 0; i < Num; ++i)
+	{
+		const FVector P0(Outline[i].X, Outline[i].Y, 0.0f);
+		const FVector P1(Outline[(i + 1) % Num].X, Outline[(i + 1) % Num].Y, 0.0f);
+		const FVector Outward = ((P0 + P1) * 0.5f - FVector(Center.X, Center.Y, 0.0f)).GetSafeNormal2D();
+
+		Data.AddTriangle(P0 + Down, P1 + Down, P1 + Up, FVector2D(0, 1), FVector2D(1, 1), FVector2D(1, 0), Outward);
+		Data.AddTriangle(P0 + Down, P1 + Up, P0 + Up, FVector2D(0, 1), FVector2D(1, 0), FVector2D(0, 0), Outward);
+	}
+
+	Target->CreateMeshSection(Section, Data.Vertices, Data.Triangles, Data.Normals, Data.UVs, {}, {}, false);
+}

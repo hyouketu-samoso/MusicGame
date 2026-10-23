@@ -47,6 +47,17 @@ void AHoldNoteActor::BeginPlay()
 	Body->SetMaterial(0, NoteMaterial);
 }
 
+void AHoldNoteActor::SetupTextureVisual()
+{
+	Super::SetupTextureVisual();
+
+	if (!TailMesh->GetStaticMesh())
+	{
+		BuildTexturePlate(TailPlate);
+		TailPlate->SetVisibility(true);
+	}
+}
+
 void AHoldNoteActor::ApplyColor(const FLinearColor& Color)
 {
 	BaseColor = Color;
@@ -69,7 +80,10 @@ void AHoldNoteActor::UpdateNote(float T)
 	const float TailT = FMath::Clamp(T - HoldDuration / TravelTime, 0.0f, HeadT);
 
 	SetActorLocationAndRotation(CalcPosition(HeadT), CalcRotation(HeadT));
-	TailPivot->SetWorldLocationAndRotation(CalcPosition(TailT), CalcRotation(TailT));
+	HeadPivot->SetRelativeRotation(FRotator(CalcTilt(HeadT), 0.0f, 0.0f));
+
+	// 終点も進み具合に合わせて回り、起こした状態から寝かせていく
+	TailPivot->SetWorldLocationAndRotation(CalcPosition(TailT), CalcRotation(TailT) * FRotator(CalcTilt(TailT), 0.0f, 0.0f).Quaternion());
 
 	UpdateBody(TailT, HeadT);
 
