@@ -18,6 +18,7 @@ class AHoldNoteActor;
 class ARhythmJudge;
 class URhythmFeedbackComponent;
 class URhythmGameFlowComponent;
+class URhythmHUDSyncComponent;
 class UCameraComponent;
 class UArrowComponent;
 
@@ -232,6 +233,15 @@ protected:
         Category = "Note Spawner|Flow"
     )
     URhythmGameFlowComponent* GameFlow = nullptr;
+
+
+    // プレイ画面の UI（スコア・コンボ・体力・判定の文字）に実際の値を渡す
+    UPROPERTY(
+        VisibleAnywhere,
+        BlueprintReadOnly,
+        Category = "Note Spawner|HUD"
+    )
+    URhythmHUDSyncComponent* HUDSync = nullptr;
 
 
     // ========================================================

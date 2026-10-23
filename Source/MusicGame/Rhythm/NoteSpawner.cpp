@@ -8,6 +8,7 @@
 #include "RhythmGameSettings.h"
 #include "RhythmFeedbackComponent.h"
 #include "RhythmGameFlowComponent.h"
+#include "RhythmHUDSyncComponent.h"
 #include "RhythmScoreComponent.h"
 #include "Engine/GameInstance.h"
 
@@ -82,6 +83,16 @@ ANoteSpawner::ANoteSpawner()
 	GameFlow =
 		CreateDefaultSubobject<URhythmGameFlowComponent>(
 			TEXT("GameFlow")
+		);
+
+
+	// ========================================================
+	// HUDSync（プレイ画面の UI に実際の値を渡す）
+	// ========================================================
+
+	HUDSync =
+		CreateDefaultSubobject<URhythmHUDSyncComponent>(
+			TEXT("HUDSync")
 		);
 
 
@@ -253,6 +264,12 @@ void ANoteSpawner::BeginPlay()
 	if (GameFlow && Judge)
 	{
 		GameFlow->BindJudge(Judge);
+	}
+
+	// スコア・コンボ・体力・判定の文字を UI に渡す
+	if (HUDSync && Judge)
+	{
+		HUDSync->BindJudge(Judge);
 	}
 
 

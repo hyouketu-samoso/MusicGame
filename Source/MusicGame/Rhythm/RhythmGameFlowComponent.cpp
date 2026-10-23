@@ -6,6 +6,7 @@
 #include "RhythmMusicPlayer.h"
 #include "SongData.h"
 #include "Blueprint/UserWidget.h"
+#include "GameOver/GameOverWidget.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -24,6 +25,13 @@ URhythmGameFlowComponent::URhythmGameFlowComponent()
 	if (ResultWidgetFinder.Succeeded())
 	{
 		ResultWidgetClass = ResultWidgetFinder.Class;
+	}
+
+	// ゲームオーバー（リトライ）画面は渋谷さんの WBP_GameOver を初期値にする
+	static ConstructorHelpers::FClassFinder<UUserWidget> GameOverWidgetFinder(TEXT("/Game/MusicGame/Widget_P/Widget_Shibuya/WBP_GameOver"));
+	if (GameOverWidgetFinder.Succeeded())
+	{
+		RetryWidgetClass = GameOverWidgetFinder.Class;
 	}
 }
 
@@ -221,6 +229,14 @@ void URhythmGameFlowComponent::ShowRetryScreen()
 	UUserWidget* Retry = CreateWidget<UUserWidget>(PC, RetryWidgetClass);
 	if (!Retry)
 	{
+		return;
+	}
+
+	// ゲームオーバー画面は Open() で、画面に出す・ポーズ・BGM 停止・入力の切り替えまで自分で行う
+	if (UGameOverWidget* GameOver = Cast<UGameOverWidget>(Retry))
+	{
+		GameOver->Open();
+		ShownWidget = GameOver;
 		return;
 	}
 
