@@ -7,6 +7,8 @@
 #include "InputCoreTypes.h"
 #include "Sound/SoundMix.h"
 #include "Sound/SoundClass.h"
+#include "Materials/MaterialParameterCollection.h"
+#include "Kismet/KismetMaterialLibrary.h"
 
 URhythmInputComponent::URhythmInputComponent()
 {
@@ -257,6 +259,7 @@ void URhythmInputComponent::BeginPlay()
 	Super::BeginPlay();
 	LoadInputSettings();	// 保存済みの設定を反映
 	ApplyVolumes();			// 保存済みの音量を反映
+	ApplyBrightness();		// 保存済みの明るさを反映
 }
 
 void URhythmInputComponent::ChangeDeadZoneStep(int32 Delta)
@@ -294,10 +297,15 @@ void URhythmInputComponent::SaveInputSettings()
 	Save->BGMVolumeLevel = BGMVolumeLevel;
 	Save->SEVolumeLevel = SEVolumeLevel;
 	Save->MasterVolumeLevel = MasterVolumeLevel;
+	Save->BGBrightnessStep = BGBrightnessLevel;
+	Save->LaneBrightnessStep = LaneBrightnessLevel;
+	Save->NoteBrightnessStep = NoteBrightnessLevel;
 
 	UGameplayStatics::SaveGameToSlot(Save, GInputSettingsSlot, 0);
 
-	UE_LOG(LogTemp, Warning, TEXT("Save: M=%d B=%d S=%d"), MasterVolumeLevel, BGMVolumeLevel, SEVolumeLevel);
+	UE_LOG(LogTemp, Warning, TEXT("Save: M=%d B=%d S=%d | Bright BG=%d Lane=%d Note=%d"),
+		MasterVolumeLevel, BGMVolumeLevel, SEVolumeLevel,
+		BGBrightnessLevel, LaneBrightnessLevel, NoteBrightnessLevel);
 }
 
 void URhythmInputComponent::LoadInputSettings()
@@ -315,8 +323,13 @@ void URhythmInputComponent::LoadInputSettings()
 	BGMVolumeLevel = FMath::Clamp(Load->BGMVolumeLevel, 0, 100);
 	SEVolumeLevel = FMath::Clamp(Load->SEVolumeLevel, 0, 100);
 	MasterVolumeLevel = FMath::Clamp(Load->MasterVolumeLevel, 0, 100);
+	BGBrightnessLevel = FMath::Clamp(Load->BGBrightnessStep, BrightnessMinStep, BrightnessMaxStep);
+	LaneBrightnessLevel = FMath::Clamp(Load->LaneBrightnessStep, BrightnessMinStep, BrightnessMaxStep);
+	NoteBrightnessLevel = FMath::Clamp(Load->NoteBrightnessStep, BrightnessMinStep, BrightnessMaxStep);
 
-	UE_LOG(LogTemp, Warning, TEXT("Load: M=%d B=%d S=%d"), MasterVolumeLevel, BGMVolumeLevel, SEVolumeLevel);
+	UE_LOG(LogTemp, Warning, TEXT("Load: M=%d B=%d S=%d | Bright BG=%d Lane=%d Note=%d"),
+		MasterVolumeLevel, BGMVolumeLevel, SEVolumeLevel,
+		BGBrightnessLevel, LaneBrightnessLevel, NoteBrightnessLevel);
 }
 
 void URhythmInputComponent::ChangeMasterVolumeStep(int32 Delta)
@@ -366,7 +379,7 @@ void URhythmInputComponent::ApplyVolumes()
 
 void URhythmInputComponent::SetMasterVolumeLevel(int32 Level)
 {
-	
+
 	MasterVolumeLevel = FMath::Clamp(Level, 0, 100);
 	bVolumeDirty = true;
 	ApplyVolumes();
@@ -394,11 +407,98 @@ void URhythmInputComponent::SaveVolumeSettings()
 
 void URhythmInputComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// スライダーで変えた音量が未保存なら、終了時に保存する
+	// スライダーで変えた音量・明るさが未保存なら、終了時に保存する
 	if (bVolumeDirty)
 	{
 		SaveVolumeSettings();
 	}
+	if (bBrightnessDirty)
+	{
+		SaveBrightnessSettings();
+	}
 
 	Super::EndPlay(EndPlayReason);
+}
+
+// ============================================================
+// 明るさ(0〜10段階。5が標準)
+// ============================================================
+
+float URhythmInputComponent::StepToScale(int32 Step, float AtMin, float AtMid, float AtMax) const
+{
+	Step = FMath::Clamp(Step, BrightnessMinStep, BrightnessMaxStep);
+
+	// 0〜5段階目: AtMin → AtMid
+	if (Step <= BrightnessMidStep)
+	{
+		const float T = float(Step - BrightnessMinStep) / float(BrightnessMidStep - BrightnessMinStep);
+		return FMath::Lerp(AtMin, AtMid, T);
+	}
+
+	// 5〜10段階目: AtMid → AtMax
+	const float T = float(Step - BrightnessMidStep) / float(BrightnessMaxStep - BrightnessMidStep);
+	return FMath::Lerp(AtMid, AtMax, T);
+}
+
+void URhythmInputComponent::ApplyBrightness()
+{
+	if (!BrightnessCollection)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("RhythmInput: BrightnessCollection が未設定です(BP_RhythmPlayerController で指定)"));
+		return;
+	}
+
+	UKismetMaterialLibrary::SetScalarParameterValue(this, BrightnessCollection, TEXT("BG"),
+		StepToScale(BGBrightnessLevel, BGScaleAtMin, BGScaleAtMid, BGScaleAtMax));
+
+	UKismetMaterialLibrary::SetScalarParameterValue(this, BrightnessCollection, TEXT("Lane"),
+		StepToScale(LaneBrightnessLevel, LaneScaleAtMin, LaneScaleAtMid, LaneScaleAtMax));
+
+	UKismetMaterialLibrary::SetScalarParameterValue(this, BrightnessCollection, TEXT("Note"),
+		StepToScale(NoteBrightnessLevel, NoteScaleAtMin, NoteScaleAtMid, NoteScaleAtMax));
+}
+
+void URhythmInputComponent::SetBGBrightnessLevel(int32 Level)
+{
+	BGBrightnessLevel = FMath::Clamp(Level, BrightnessMinStep, BrightnessMaxStep);
+	bBrightnessDirty = true;
+	ApplyBrightness();
+}
+
+void URhythmInputComponent::SetLaneBrightnessLevel(int32 Level)
+{
+	LaneBrightnessLevel = FMath::Clamp(Level, BrightnessMinStep, BrightnessMaxStep);
+	bBrightnessDirty = true;
+	ApplyBrightness();
+}
+
+void URhythmInputComponent::SetNoteBrightnessLevel(int32 Level)
+{
+	NoteBrightnessLevel = FMath::Clamp(Level, BrightnessMinStep, BrightnessMaxStep);
+	bBrightnessDirty = true;
+	ApplyBrightness();
+}
+
+void URhythmInputComponent::ChangeBGBrightnessStep(int32 Delta)
+{
+	SetBGBrightnessLevel(BGBrightnessLevel + Delta);
+	SaveBrightnessSettings();
+}
+
+void URhythmInputComponent::ChangeLaneBrightnessStep(int32 Delta)
+{
+	SetLaneBrightnessLevel(LaneBrightnessLevel + Delta);
+	SaveBrightnessSettings();
+}
+
+void URhythmInputComponent::ChangeNoteBrightnessStep(int32 Delta)
+{
+	SetNoteBrightnessLevel(NoteBrightnessLevel + Delta);
+	SaveBrightnessSettings();
+}
+
+void URhythmInputComponent::SaveBrightnessSettings()
+{
+	bBrightnessDirty = false;
+	SaveInputSettings();
 }
