@@ -14,4 +14,8 @@ public:
 	UPROPERTY() int32 BGMVolumeLevel = 100;
 	UPROPERTY() int32 SEVolumeLevel = 100;
 	UPROPERTY() int32 MasterVolumeLevel = 100;
+	// 明るさ(0〜10の段階。5が標準)。古い保存データには無いので、読み込み時は5になる
+	UPROPERTY() int32 BGBrightnessStep = 5;
+	UPROPERTY() int32 LaneBrightnessStep = 5;
+	UPROPERTY() int32 NoteBrightnessStep = 5;
 };
