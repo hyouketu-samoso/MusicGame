@@ -103,6 +103,15 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UButton> GameEndButton;
 
+	// ボタンの見た目用の画像(Image。無くても動く)
+	//  置いたときは、ボタンは「押せる範囲」だけになり(見えなくなり)、絵はこの画像が受け持つ。
+	//  画像の大きさを、ボタンの範囲と別に決められる(ボタンの上に重ねて置く)
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> TitleButtonImage;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> GameEndButtonImage;
+
 private:
 	enum class EState : uint8 { Hidden, FadingIn, Shown, Closing };
 
@@ -122,6 +131,9 @@ private:
 	UFUNCTION() void HandleGameEndHovered();
 	UFUNCTION() void HandleTitleClicked();
 	UFUNCTION() void HandleGameEndClicked();
+
+	// ボタンを、見えなくする(押せる範囲だけ残す。見た目用の画像を別に置いたとき用)
+	void MakeButtonInvisible(UButton* Button);
 
 	// ボタンに画像を設定する(枠なし・文字なし)
 	void ApplyButtonImage(UButton* Button, UTexture2D* Texture);

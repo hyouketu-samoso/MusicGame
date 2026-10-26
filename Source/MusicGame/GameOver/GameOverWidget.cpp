@@ -9,6 +9,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Styling/SlateTypes.h"
 #include "Styling/SlateBrush.h"
+#include "Brushes/SlateNoResource.h"
 #include "UObject/UnrealType.h"
 #include "RhythmMusicPlayer.h"   // 曲を止めるため
 
@@ -43,7 +44,18 @@ void UGameOverWidget::NativeConstruct()
 		SetGameOverButtonNotFocusable(TitleButton);
 		TitleButton->OnHovered.AddUniqueDynamic(this, &UGameOverWidget::HandleTitleHovered);
 		TitleButton->OnClicked.AddUniqueDynamic(this, &UGameOverWidget::HandleTitleClicked);
-		ApplyButtonImage(TitleButton, TitleButtonTexture);
+		if (TitleButtonImage)
+		{
+			// 見た目用の画像があるとき: ボタンは見えなくして、絵は画像に任せる
+			MakeButtonInvisible(TitleButton);
+			if (TitleButtonTexture) { TitleButtonImage->SetBrushFromTexture(TitleButtonTexture, false); }
+			TitleButtonImage->SetVisibility(ESlateVisibility::HitTestInvisible);   // 画像は、クリックを邪魔しない
+			TitleButtonImage->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+		}
+		else
+		{
+			ApplyButtonImage(TitleButton, TitleButtonTexture);
+		}
 		TitleButton->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 	}
 	if (GameEndButton)
@@ -51,7 +63,17 @@ void UGameOverWidget::NativeConstruct()
 		SetGameOverButtonNotFocusable(GameEndButton);
 		GameEndButton->OnHovered.AddUniqueDynamic(this, &UGameOverWidget::HandleGameEndHovered);
 		GameEndButton->OnClicked.AddUniqueDynamic(this, &UGameOverWidget::HandleGameEndClicked);
-		ApplyButtonImage(GameEndButton, GameEndButtonTexture);
+		if (GameEndButtonImage)
+		{
+			MakeButtonInvisible(GameEndButton);
+			if (GameEndButtonTexture) { GameEndButtonImage->SetBrushFromTexture(GameEndButtonTexture, false); }
+			GameEndButtonImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+			GameEndButtonImage->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+		}
+		else
+		{
+			ApplyButtonImage(GameEndButton, GameEndButtonTexture);
+		}
 		GameEndButton->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 	}
 
@@ -225,18 +247,27 @@ void UGameOverWidget::SetSelectedIndex(int32 NewIndex)
 // 選択中は大きく・明るく、選んでいないほうは小さく・暗くする
 void UGameOverWidget::UpdateVisual()
 {
-	auto Apply = [this](UButton* Button, bool bSelected)
+	// 見た目用の画像があれば、画像を拡大・色替えする。無ければ、ボタンそのものを
+	auto Apply = [this](UButton* Button, UImage* Image, bool bSelected)
 		{
-			if (!Button)
+			const FVector2D Scale = bSelected ? FVector2D(SelectedScale, SelectedScale) : FVector2D(1.0f, 1.0f);
+			const FLinearColor Color = bSelected ? SelectedColor : NormalColor;
+
+			if (Image)
 			{
+				Image->SetRenderScale(Scale);
+				Image->SetColorAndOpacity(Color);   // 画像に色を掛ける
 				return;
 			}
-			Button->SetRenderScale(bSelected ? FVector2D(SelectedScale, SelectedScale) : FVector2D(1.0f, 1.0f));
-			Button->SetBackgroundColor(bSelected ? SelectedColor : NormalColor);   // 画像に色を掛ける
+			if (Button)
+			{
+				Button->SetRenderScale(Scale);
+				Button->SetBackgroundColor(Color);   // 画像に色を掛ける
+			}
 		};
 
-	Apply(TitleButton, SelectedIndex == 0);
-	Apply(GameEndButton, SelectedIndex == 1);
+	Apply(TitleButton, TitleButtonImage, SelectedIndex == 0);
+	Apply(GameEndButton, GameEndButtonImage, SelectedIndex == 1);
 }
 
 // 決定
@@ -293,6 +324,23 @@ void UGameOverWidget::HandleGameEndClicked()
 {
 	SelectedIndex = 1;
 	Confirm();
+}
+
+// ボタンを見えなくする(クリックできる範囲は、そのまま残る)
+void UGameOverWidget::MakeButtonInvisible(UButton* Button)
+{
+	if (!Button)
+	{
+		return;
+	}
+
+	FButtonStyle Style = Button->GetStyle();
+	Style.Normal = FSlateNoResource();
+	Style.Hovered = FSlateNoResource();
+	Style.Pressed = FSlateNoResource();
+	Style.Disabled = FSlateNoResource();
+	Button->SetStyle(Style);
+	Button->SetBackgroundColor(FLinearColor::Transparent);
 }
 
 // ボタンに画像を設定する(通常・乗せた・押した、すべて同じ画像。枠線・背景色なし)
