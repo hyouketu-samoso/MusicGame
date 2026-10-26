@@ -1,9 +1,11 @@
 ﻿// 判定の演出（エフェクト・SE）を出すコンポーネント。NoteSpawner に付いている。
 // 判定役（ARhythmJudge）の通知を受けて、判定ラインのレーン位置にエフェクトを出し、SE を鳴らす。
 //
-// ・通常ノーツ / ホールドの始点 : 判定ごとのエフェクト + SE
+// ・通常ノーツ                 : 判定ごとのエフェクト + SE
+// ・ホールドの始点              : SE だけ（エフェクトは下の HoldCharge）
 // ・ホールドを押している間     : HoldCharge エフェクト（+ HoldLoopSound）を出し続ける
-// ・ホールドの終点（離したとき）: HoldCharge を止めて、判定ごとのエフェクト + HoldBurst（Good 以上）+ SE
+// ・ホールドの終点（離したとき）: HoldCharge を止めて、HoldBurst（Good 以上）+ SE
+//   ※ bShowJudgementEffectOnHold をオンにすると、始点・終点にも判定ごとのエフェクトを出す
 // ・空打ち（ノーツが無いところを押した）: EmptyPress エフェクト + EmptyPressSound
 // ・ミス : その瞬間は何も出さない。ミスから MissPressWindow 秒以内にそのレーンを押したら
 //          空打ちの代わりに Judgement.Miss のエフェクト（+ MissPressSound）を1回だけ出す
@@ -188,6 +190,11 @@ protected:
 	// ミスの瞬間には何も出さない（見逃しただけならエフェクトなし）。ホールド終点のミスは対象外
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Feedback|Effect", meta=(ClampMin=0.0, Units="s"))
 	float MissPressWindow = 0.5f;
+
+	// ホールドの始点・終点でも、通常ノーツと同じ判定エフェクト（perfect など）を出すか。
+	// false なら、始点は HoldCharge だけ、終点は HoldBurst（Good 以上）だけ
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Feedback|Effect")
+	bool bShowJudgementEffectOnHold = false;
 
 	// ---------- SE ----------
 
