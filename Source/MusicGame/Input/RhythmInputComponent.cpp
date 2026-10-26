@@ -361,20 +361,29 @@ void URhythmInputComponent::ApplyVolumes()
 		return;
 	}
 
-	// 指数を変えると、スライダーの効き方が変わる(1.0=直線、2.0=2乗)
-	const float VolumeCurveExponent = 1.5f;
+	// 指数を変えると、スライダーの効き方が変わる
+	//   1.0   = 直線(値/100 がそのまま音量)
+	//   1.0超 = 低い値で急に小さくなる(2.0=2乗)
+	//   1.0未満 = 低い値でも音が残る(0.5=平方根)
+	const float MasterCurveExponent = 1.0f;	// マスター:
+	const float BGMCurveExponent = 1.0f;	// BGM
+	const float SECurveExponent = 1.0f;		// SE 補正なし
 
-	auto ToGain = [VolumeCurveExponent](int32 Level)
+	auto ToGain = [](int32 Level, float Exponent)
 		{
 			const float Normalized = FMath::Clamp(Level / 100.0f, 0.0f, 1.0f);
-			return FMath::Pow(Normalized, VolumeCurveExponent);
+			return FMath::Pow(Normalized, Exponent);
 		};
 
-	const float Master = ToGain(MasterVolumeLevel);
+	// マスターは BGM / SE 共通なので、同じ値を両方に掛ける
+	const float Master = ToGain(MasterVolumeLevel, MasterCurveExponent);
+
+	const float BGMGain = Master * ToGain(BGMVolumeLevel, BGMCurveExponent);
+	const float SEGain = Master * ToGain(SEVolumeLevel, SECurveExponent);
 
 	UGameplayStatics::SetBaseSoundMix(this, SoundMix);
-	UGameplayStatics::SetSoundMixClassOverride(this, SoundMix, BGMClass, Master * ToGain(BGMVolumeLevel), 1.0f, 0.0f, true);
-	UGameplayStatics::SetSoundMixClassOverride(this, SoundMix, SEClass, Master * ToGain(SEVolumeLevel), 1.0f, 0.0f, true);
+	UGameplayStatics::SetSoundMixClassOverride(this, SoundMix, BGMClass, BGMGain, 1.0f, 0.0f, true);
+	UGameplayStatics::SetSoundMixClassOverride(this, SoundMix, SEClass, SEGain, 1.0f, 0.0f, true);
 }
 
 void URhythmInputComponent::SetMasterVolumeLevel(int32 Level)

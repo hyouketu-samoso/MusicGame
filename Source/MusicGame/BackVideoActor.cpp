@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/World.h"
 #include "MediaPlayer.h"
 #include "MediaSource.h"
 #include "MediaTexture.h"
@@ -46,6 +47,16 @@ void ABackVideoActor::BeginPlay()
 	SetupSlot(Video2, Slot2);
 }
 
+void ABackVideoActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// 動画プレイヤーはレベルを開き直しても残るので、このアクターへの登録を外しておく
+	GetWorldTimerManager().ClearTimer(SeekFallbackTimer);
+	if (Slot1.Player) { Slot1.Player->OnSeekCompleted.RemoveDynamic(this, &ABackVideoActor::HandleSeekCompleted); }
+	if (Slot2.Player) { Slot2.Player->OnSeekCompleted.RemoveDynamic(this, &ABackVideoActor::HandleSeekCompleted); }
+
+	Super::EndPlay(EndPlayReason);
+}
+
 void ABackVideoActor::SetupSlot(UStaticMeshComponent* Mesh, const FBackVideoSlot& InSlot)
 {
 	if (!Mesh || !BaseMaterial)
@@ -63,13 +74,60 @@ void ABackVideoActor::SetupSlot(UStaticMeshComponent* Mesh, const FBackVideoSlot
 
 	if (InSlot.Player && InSlot.Source)
 	{
-		if (InSlot.Player->OpenSource(InSlot.Source))
+		// リトライなどでレベルを開き直したとき、同じ動画がすでに開いていれば、開き直さない
+		const bool bAlreadyOpen =
+			InSlot.Player->IsReady() &&
+			InSlot.Player->GetUrl() == InSlot.Source->GetUrl();
+
+		if (bAlreadyOpen)
+		{
+			const int32 Idx = (&InSlot == &Slot2) ? 1 : 0;
+
+			InSlot.Player->SetLooping(true);
+
+			// 再生中のまま Seek すると取りこぼされることがあるので、いったん止めてから移動する
+			InSlot.Player->Pause();
+			InSlot.Player->OnSeekCompleted.AddUniqueDynamic(this, &ABackVideoActor::HandleSeekCompleted);
+
+			if (InSlot.Player->Seek(FTimespan::FromSeconds(RestartSeconds)))
+			{
+				// 移動が終わったら再生する(HandleSeekCompleted)
+				bWaitSeek[Idx] = true;
+
+				// 完了の通知が来なくても、1秒後には必ず再生する(止まったままにならないための保険)
+				GetWorldTimerManager().SetTimer(SeekFallbackTimer, this, &ABackVideoActor::PlayWaitingVideos, 1.0f, false);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("BackVideo: Seek failed (slot %d)"), Idx);
+				InSlot.Player->Play();
+			}
+		}
+		else if (InSlot.Player->OpenSource(InSlot.Source))
 		{
 			InSlot.Player->SetLooping(true);
 		}
 		else
 		{
 			UE_LOG(LogTemp, Warning, TEXT("BackVideo: OpenSource failed"));
+		}
+	}
+}
+
+void ABackVideoActor::HandleSeekCompleted()
+{
+	PlayWaitingVideos();
+}
+
+void ABackVideoActor::PlayWaitingVideos()
+{
+	const FBackVideoSlot* Slots[2] = { &Slot1, &Slot2 };
+	for (int32 i = 0; i < 2; ++i)
+	{
+		if (bWaitSeek[i] && Slots[i]->Player)
+		{
+			bWaitSeek[i] = false;
+			Slots[i]->Player->Play();
 		}
 	}
 }

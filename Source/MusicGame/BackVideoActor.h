@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "TimerManager.h"
 #include "BackVideoActor.generated.h"
 
 class UStaticMeshComponent;
@@ -52,13 +53,31 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Video")
 	FBackVideoSlot Slot2;
 
+	// リトライ時などに、動画をこの秒数から再生し直す(冒頭のフェードインを飛ばすため)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Video", meta = (ClampMin = "0.0", Units = "s"))
+	float RestartSeconds = 1.5f;
+
 	// ポーズ画面に入った・出た時に動画を止める/再開する
 	void PauseVideos();
 	void ResumeVideos();
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
 	void SetupSlot(UStaticMeshComponent* Mesh, const FBackVideoSlot& InSlot);
+
+	// Seek が終わったら再生を始める
+	UFUNCTION()
+	void HandleSeekCompleted();
+
+	// 移動待ちの動画を再生する(Seek の通知が来なかったときの保険にも使う)
+	void PlayWaitingVideos();
+
+	// Slot1 / Slot2 が Seek の完了待ちか
+	bool bWaitSeek[2] = { false, false };
+
+	// Seek の通知が来なくても、一定時間後に再生を始めるためのタイマー
+	FTimerHandle SeekFallbackTimer;
 };
