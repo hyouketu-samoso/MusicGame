@@ -23,4 +23,7 @@ public:
 	UPROPERTY() int32 BGBrightnessStep = 5;
 	UPROPERTY() int32 LaneBrightnessStep = 5;
 	UPROPERTY() int32 NoteBrightnessStep = 5;
+	// 曲名＋難易度ごとの最高スコア
+	UPROPERTY()
+	TMap<FString, int64> BestScores;
 };
