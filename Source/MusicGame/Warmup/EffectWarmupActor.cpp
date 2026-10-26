@@ -9,10 +9,15 @@
 #include "TimerManager.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
+#include "Components/SceneComponent.h"
 
 AEffectWarmupActor::AEffectWarmupActor()
 {
 	PrimaryActorTick.bCanEverTick = false;
+
+	// 位置を持てるように、ルートを作る
+	USceneComponent* Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	SetRootComponent(Root);
 }
 
 void AEffectWarmupActor::BeginPlay()
@@ -43,15 +48,25 @@ void AEffectWarmupActor::RunWarmup()
 		return;
 	}
 
-	// カメラの前の位置を決める(画面の外だと描かれず、準備が走らないため、画面の中の小さな点に出す)
-	FVector CamLoc = GetActorLocation();
-	FRotator CamRot = FRotator::ZeroRotator;
-	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+	// エフェクトを出す位置を決める
+	if (bSpawnAtActorLocation)
 	{
-		PC->GetPlayerViewPoint(CamLoc, CamRot);
+		// このアクターの位置に出す(レベルで、画面の範囲内の見えない場所に置く)
+		SpawnLocation = GetActorLocation();
+		SpawnRotation = GetActorRotation();
 	}
-	SpawnLocation = CamLoc + CamRot.Vector() * DistanceFromCamera;
-	SpawnRotation = CamRot;
+	else
+	{
+		// カメラの前の位置に出す(画面の外だと描かれず、準備が走らないため、画面の中の小さな点に出す)
+		FVector CamLoc = GetActorLocation();
+		FRotator CamRot = FRotator::ZeroRotator;
+		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+		{
+			PC->GetPlayerViewPoint(CamLoc, CamRot);
+		}
+		SpawnLocation = CamLoc + CamRot.Vector() * DistanceFromCamera;
+		SpawnRotation = CamRot;
+	}
 
 	// 読み込むアセットの一覧
 	TArray<FSoftObjectPath> Paths;

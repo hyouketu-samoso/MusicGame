@@ -209,13 +209,13 @@ public:
 
 	// ノーツ: MPC の Note に渡す値(マテリアル側で Note の4乗を掛けている想定)
 	UPROPERTY(EditAnywhere, Category = "Rhythm|Brightness", meta = (ClampMin = "0.0", ClampMax = "4.0"))
-	float NoteScaleAtMin = 0.3f;
+	float NoteScaleAtMin = 0.5f;
 
 	UPROPERTY(EditAnywhere, Category = "Rhythm|Brightness", meta = (ClampMin = "0.0", ClampMax = "4.0"))
-	float NoteScaleAtMid = 0.5f;
+	float NoteScaleAtMid = 1.0f;	// 今の10の色が、標準の5で出る
 
 	UPROPERTY(EditAnywhere, Category = "Rhythm|Brightness", meta = (ClampMin = "0.0", ClampMax = "4.0"))
-	float NoteScaleAtMax = 1.0f;
+	float NoteScaleAtMax = 1.3f;	// 10は、標準より少し明るい側
 
 	// レーン: 素材が決まったら調整する(今は仮の値)
 	UPROPERTY(EditAnywhere, Category = "Rhythm|Brightness", meta = (ClampMin = "0.0", ClampMax = "4.0"))
@@ -233,9 +233,9 @@ public:
 
 private:
 	int32 SensitivityLevel = 3;
-	int32 BGMVolumeLevel = 100;
-	int32 SEVolumeLevel = 100;
-	int32 MasterVolumeLevel = 100;
+	int32 BGMVolumeLevel = 50;
+	int32 SEVolumeLevel = 50;
+	int32 MasterVolumeLevel = 50;
 
 	// 明るさの段階(0〜10。5が標準)
 	int32 BGBrightnessLevel = 5;

@@ -4,6 +4,8 @@
 //         初めてエフェクトを出したときの「アセット読み込み・シェーダー準備」のかくつきを、
 //         曲選択を表示している間に済ませておく
 //  使い方 : レベルに1つ置いて、Warmup Systems に使うエフェクトを全部登録する
+//           Spawn At Actor Location がオンなら、このアクターの位置にエフェクトを出す
+//           (画面の範囲内で、動画の裏など、見えない場所に置く)
 // ============================================================
 #pragma once
 
@@ -41,8 +43,13 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Warmup", meta = (ClampMin = "0.0001"))
 	float WarmupScale = 0.01f;
 
-	// カメラの前、どれくらい離れた場所に出すか(cm)
+	// true  : エフェクトを、このアクターの位置に出す(レベルで、画面の範囲内の見えない場所に置く)
+	// false : エフェクトを、カメラの前に出す
 	UPROPERTY(EditAnywhere, Category = "Warmup")
+	bool bSpawnAtActorLocation = true;
+
+	// カメラの前、どれくらい離れた場所に出すか(cm)(Spawn At Actor Location がオフのときだけ使う)
+	UPROPERTY(EditAnywhere, Category = "Warmup", meta = (EditCondition = "!bSpawnAtActorLocation"))
 	float DistanceFromCamera = 300.0f;
 
 private:
