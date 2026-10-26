@@ -167,9 +167,110 @@ void URhythmGameFlowComponent::HandleSongFinished(bool bCleared, double FinalSco
 	{
 		return;
 	}
-	bScreenRequested = true;
 
-	GetWorld()->GetTimerManager().SetTimer(ScreenTimer, this, &URhythmGameFlowComponent::ShowResultScreen, FMath::Max(ResultDelay, 0.01f), false);
+	bScreenRequested = true;
+	PendingAchievementClass = nullptr;
+
+	// ゲームオーバー相当など、クリアではない場合は実績を表示しない
+	if (!bCleared)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(
+				ScreenTimer,
+				this,
+				&URhythmGameFlowComponent::ShowResultScreen,
+				FMath::Max(ResultDelay, 0.01f),
+				false
+			);
+		}
+		return;
+	}
+
+	URhythmScoreComponent* Score = GetScore();
+
+	if (Score)
+	{
+		const int32 Perfect = Score->GetJudgementCount(ERhythmJudgement::Perfect);
+		const int32 Great = Score->GetJudgementCount(ERhythmJudgement::Great);
+		const int32 Good = Score->GetJudgementCount(ERhythmJudgement::Good);
+		const int32 Bad = Score->GetJudgementCount(ERhythmJudgement::Bad);
+		const int32 Miss = Score->GetJudgementCount(ERhythmJudgement::Miss);
+
+		const int32 Judged = Score->GetJudgedCount();
+		const int32 Total = Score->GetTotalJudgeCount();
+
+		// 総判定数が設定されていれば全判定済みか確認する。
+		// 0 の場合は、テスト譜面など総判定数が未設定のケースとして扱う。
+		const bool bAllJudgementsFinished =
+			Total > 0 ? Judged >= Total : Judged > 0;
+
+		const bool bAllPerfect =
+			bAllJudgementsFinished &&
+			Judged > 0 &&
+			Perfect == Judged &&
+			Great == 0 &&
+			Good == 0 &&
+			Bad == 0 &&
+			Miss == 0;
+
+		const bool bFullCombo =
+			bAllJudgementsFinished &&
+			Judged > 0 &&
+			Bad == 0 &&
+			Miss == 0;
+
+		// NEW RECORD の判定
+		bool bNewRecord = false;
+
+		if (const ARhythmMusicPlayer* MusicPlayer = FindMusicPlayer())
+		{
+			if (const USongData* SongData = MusicPlayer->GetCurrentSongData())
+			{
+				if (UGameInstance* GI = UGameplayStatics::GetGameInstance(this))
+				{
+					if (URhythmSettingsSubsystem* Settings =
+						GI->GetSubsystem<URhythmSettingsSubsystem>())
+					{
+						const int64 CurrentScore = Score
+							? static_cast<int64>(Score->GetDisplayScore())
+							: static_cast<int64>(FinalScore);
+
+						bNewRecord = Settings->TryUpdateBestScore(
+							SongData->SongTitle.ToString(),
+							CurrentScore
+						);
+					}
+				}
+			}
+		}
+
+		// 優先順位：ALL PERFECT > FULL COMBO > NEW RECORD
+		if (bAllPerfect && AllPerfectWidgetClass)
+		{
+			PendingAchievementClass = AllPerfectWidgetClass;
+		}
+		else if (bFullCombo && FullComboWidgetClass)
+		{
+			PendingAchievementClass = FullComboWidgetClass;
+		}
+		else if (bNewRecord && NewRecordWidgetClass)
+		{
+			PendingAchievementClass = NewRecordWidgetClass;
+		}
+	}
+
+	// クリア表示を開始する（ResultDelay はクリア後の待機時間として維持）
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			ScreenTimer,
+			this,
+			&URhythmGameFlowComponent::ShowGameClearThenAchievement,
+			FMath::Max(ResultDelay, 0.01f),
+			false
+		);
+	}
 }
 
 void URhythmGameFlowComponent::HandleGameOver()
@@ -189,6 +290,85 @@ void URhythmGameFlowComponent::HandleGameOver()
 	}
 
 	GetWorld()->GetTimerManager().SetTimer(ScreenTimer, this, &URhythmGameFlowComponent::ShowRetryScreen, FMath::Max(RetryDelay, 0.01f), false);
+}
+
+void URhythmGameFlowComponent::ShowGameClearThenAchievement()
+{
+	if (GameClearWidgetClass)
+	{
+		ShowAchievementWidget(GameClearWidgetClass);
+
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(
+				ScreenTimer,
+				this,
+				&URhythmGameFlowComponent::ShowPendingAchievement,
+				FMath::Max(AchievementDuration, 0.1f),
+				false
+			);
+		}
+	}
+	else
+	{
+		// GAME CLEAR のウィジェットが未設定なら、実績表示へ進む
+		ShowPendingAchievement();
+	}
+}
+
+void URhythmGameFlowComponent::ShowPendingAchievement()
+{
+	// 直前の GAME CLEAR 画面を閉じる
+	if (IsValid(ShownWidget))
+	{
+		ShownWidget->RemoveFromParent();
+		ShownWidget = nullptr;
+	}
+
+	if (PendingAchievementClass)
+	{
+		ShowAchievementWidget(PendingAchievementClass);
+
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(
+				ScreenTimer,
+				this,
+				&URhythmGameFlowComponent::ShowResultScreen,
+				FMath::Max(AchievementDuration, 0.1f),
+				false
+			);
+		}
+	}
+	else
+	{
+		// 実績がなければリザルトへ
+		ShowResultScreen();
+	}
+}
+
+void URhythmGameFlowComponent::ShowAchievementWidget(
+	TSubclassOf<UUserWidget> WidgetClass)
+{
+	if (!WidgetClass)
+	{
+		return;
+	}
+
+	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+	if (!PC)
+	{
+		return;
+	}
+
+	UUserWidget* Widget = CreateWidget<UUserWidget>(PC, WidgetClass);
+	if (!Widget)
+	{
+		return;
+	}
+
+	Widget->AddToViewport(1000);
+	ShownWidget = Widget;
 }
 
 void URhythmGameFlowComponent::ShowResultScreen()

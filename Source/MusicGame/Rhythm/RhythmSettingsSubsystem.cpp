@@ -243,6 +243,97 @@ int32 URhythmSettingsSubsystem::GetNoteBrightnessStep() const
     return NoteBrightnessStep;
 }
 
+// 曲名と現在の難易度から保存キーを作成
+namespace
+{
+    FString MakeBestScoreKey(
+        const FString& SongTitle,
+        ERhythmDifficulty Difficulty)
+    {
+        FString DifficultyName;
+
+        switch (Difficulty)
+        {
+        case ERhythmDifficulty::Easyst:
+            DifficultyName = TEXT("Easyst");
+            break;
+
+        case ERhythmDifficulty::Easy:
+            DifficultyName = TEXT("Easy");
+            break;
+
+        case ERhythmDifficulty::Normal:
+            DifficultyName = TEXT("Normal");
+            break;
+
+        case ERhythmDifficulty::Hard:
+            DifficultyName = TEXT("Hard");
+            break;
+
+        case ERhythmDifficulty::Hardest:
+            DifficultyName = TEXT("Hardest");
+            break;
+
+        default:
+            DifficultyName = TEXT("Normal");
+            break;
+        }
+
+        return FString::Printf(
+            TEXT("%s|%s"),
+            *SongTitle,
+            *DifficultyName);
+    }
+}
+// 最高スコアを取得
+int64 URhythmSettingsSubsystem::GetBestScore(
+    FString SongTitle) const
+{
+    const FString Key = MakeBestScoreKey(SongTitle, Difficulty);
+
+    if (const int64* Score = BestScores.Find(Key))
+    {
+        return *Score;
+    }
+
+    // 未記録の場合
+    return 0;
+}
+
+// 最高スコアを更新
+bool URhythmSettingsSubsystem::TryUpdateBestScore(
+    FString SongTitle,
+    int64 NewScore)
+{
+    if (SongTitle.IsEmpty() || NewScore < 0)
+    {
+        return false;
+    }
+
+    const FString Key = MakeBestScoreKey(SongTitle, Difficulty);
+    const int64* PreviousScore = BestScores.Find(Key);
+
+    // 既存記録以上なら更新しない
+    if (PreviousScore && NewScore <= *PreviousScore)
+    {
+        return false;
+    }
+
+    BestScores.Add(Key, NewScore);
+
+    // 既存の設定保存処理を利用してまとめて保存
+    SaveSettings();
+
+    UE_LOG(
+        LogTemp,
+        Log,
+        TEXT("[RhythmRecord] New record: %s = %lld"),
+        *Key,
+        NewScore);
+
+    return true;
+}
+
 void URhythmSettingsSubsystem::SetNoteBrightnessStep(int32 NewStep)
 {
     const int32 Clamped = FMath::Clamp(NewStep, 0, 10);
@@ -286,6 +377,9 @@ void URhythmSettingsSubsystem::SaveSettings() const
     Save->BGBrightnessStep = BGBrightnessStep;
     Save->LaneBrightnessStep = LaneBrightnessStep;
     Save->NoteBrightnessStep = NoteBrightnessStep;
+
+    // 最高スコア
+    Save->BestScores = BestScores;
 
     const bool bSaved = UGameplayStatics::SaveGameToSlot(
         Save,
@@ -343,6 +437,9 @@ void URhythmSettingsSubsystem::LoadSettings()
     LaneBrightnessStep = FMath::Clamp(Save->LaneBrightnessStep, 0, 10);
 
     NoteBrightnessStep = FMath::Clamp(Save->NoteBrightnessStep, 0, 10);
+
+    // 最高スコア
+    BestScores = Save->BestScores;
 
     UE_LOG(LogTemp, Log,TEXT("[Settings] Settings loaded successfully."));
 }

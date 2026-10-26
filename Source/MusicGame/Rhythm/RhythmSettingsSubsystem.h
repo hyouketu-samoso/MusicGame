@@ -175,6 +175,14 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Settings|Brightness")
 	void SetNoteBrightnessStep(int32 NewStep);
+
+	// 指定した曲・現在の難易度の最高スコアを取得
+	UFUNCTION(BlueprintPure, Category = "Rhythm Records")
+	int64 GetBestScore(FString SongTitle) const;
+
+	// 最高スコアを更新。更新した場合 true
+	UFUNCTION(BlueprintCallable, Category = "Rhythm Records")
+	bool TryUpdateBestScore(FString SongTitle, int64 NewScore);
 private:
 
 	// セーブデータへの書き込み・読み込み
@@ -216,4 +224,8 @@ private:
 
 	UPROPERTY()
 	int32 NoteBrightnessStep = 5;
+
+	// 曲名＋難易度ごとの最高スコア
+	UPROPERTY()
+	TMap<FString, int64> BestScores;
 };

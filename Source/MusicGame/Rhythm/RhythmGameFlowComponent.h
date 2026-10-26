@@ -30,7 +30,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnRetryScreenRequested);
 // リザルト画面を出すとき（曲の終わり）
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResultScreenRequested, const FRhythmResultData&, ResultData);
 
-UCLASS(ClassGroup=(Rhythm), meta=(BlueprintSpawnableComponent))
+UCLASS(ClassGroup = (Rhythm), meta = (BlueprintSpawnableComponent))
 class URhythmGameFlowComponent : public UActorComponent
 {
 	GENERATED_BODY()
@@ -45,17 +45,17 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	// いまの結果からリザルト画面に渡すデータを作る
-	UFUNCTION(BlueprintCallable, Category="Rhythm Flow")
+	UFUNCTION(BlueprintCallable, Category = "Rhythm Flow")
 	FRhythmResultData BuildResultData() const;
 
 	// 曲の長さ（秒、譜面の時間で比べる）
-	UFUNCTION(BlueprintPure, Category="Rhythm Flow")
+	UFUNCTION(BlueprintPure, Category = "Rhythm Flow")
 	float GetSongLength() const;
 
-	UPROPERTY(BlueprintAssignable, Category="Rhythm Flow")
+	UPROPERTY(BlueprintAssignable, Category = "Rhythm Flow")
 	FOnRetryScreenRequested OnRetryScreenRequested;
 
-	UPROPERTY(BlueprintAssignable, Category="Rhythm Flow")
+	UPROPERTY(BlueprintAssignable, Category = "Rhythm Flow")
 	FOnResultScreenRequested OnResultScreenRequested;
 
 protected:
@@ -64,48 +64,72 @@ protected:
 
 	// ---------- 画面 ----------
 
+	// GAME CLEAR 表示ウィジェット
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Achievement")
+	TSubclassOf<UUserWidget> GameClearWidgetClass;
+
+	// ALL PERFECT 表示ウィジェット
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Achievement")
+	TSubclassOf<UUserWidget> AllPerfectWidgetClass;
+
+	// FULL COMBO 表示ウィジェット
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Achievement")
+	TSubclassOf<UUserWidget> FullComboWidgetClass;
+
+	// NEW RECORD 表示ウィジェット
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Achievement")
+	TSubclassOf<UUserWidget> NewRecordWidgetClass;
+
+	// GAME CLEAR・実績を表示する時間
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Achievement", meta = (ClampMin = "0.1"))
+	float AchievementDuration = 1.5f;
+
+	// 表示する実績（優先順位により1つだけ選択）
+	UPROPERTY()
+	TSubclassOf<UUserWidget> PendingAchievementClass;
+
 	// リザルト画面（WBP_Result）
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Widget")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Widget")
 	TSubclassOf<URhythmResultWidget> ResultWidgetClass;
 
 	// リトライ（ゲームオーバー）画面。初期値は WBP_GameOver。空のときは OnRetryScreenRequested を出すだけ。
 	// UGameOverWidget なら Open() を呼ぶ（画面に出す・ポーズ・BGM 停止・入力の切り替えは画面が行う）
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Widget")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Widget")
 	TSubclassOf<UUserWidget> RetryWidgetClass;
 
 	// リトライ画面を出している間、ゲームを止める（UGameOverWidget 以外の画面のときだけ。リザルト画面は自分で止める）
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Widget")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Widget")
 	bool bPauseWhileRetryShown = true;
 
 	// ---------- タイミング ----------
 
 	// 曲が終わってからリザルト画面を出すまで（秒）
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Timing", meta=(ClampMin=0.0, Units="s"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Timing", meta = (ClampMin = 0.0, Units = "s"))
 	float ResultDelay = 2.0f;
 
 	// ゲームオーバーからリトライ画面を出すまで（秒）
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Timing", meta=(ClampMin=0.0, Units="s"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Timing", meta = (ClampMin = 0.0, Units = "s"))
 	float RetryDelay = 1.5f;
 
 	// ゲームオーバーになった瞬間に BGM を止める（RhythmMusicPlayer::StopMusic）。
 	// false なら、リトライ画面が出るまで鳴らしておく（WBP_GameOver は開くときに BGM を止める）
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Timing")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Timing")
 	bool bStopMusicOnGameOver = false;
 
 	// ---------- 曲の長さ ----------
 
 	// 曲の長さを取る BGM（手動で上書きしたいときだけ設定する）。空なら選択中の曲の BGM を使う
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Song")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Song")
 	TObjectPtr<USoundBase> SongSoundOverride = nullptr;
 
 	// BGM の長さが分からないとき、最後のノーツから何秒後を曲の終わりにするか
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Song", meta=(ClampMin=0.0, Units="s"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Song", meta = (ClampMin = 0.0, Units = "s"))
 	float EndMarginAfterLastNote = 2.0f;
 
 	// ---------- 集計 ----------
 
 	// FAST / LATE に Perfect も数える（false なら Great・Good・Bad だけ）
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rhythm Flow|Result")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Result")
 	bool bCountPerfectInFastLate = false;
 
 private:
@@ -121,6 +145,11 @@ private:
 
 	void ShowResultScreen();
 	void ShowRetryScreen();
+
+	// クリア・実績表示
+	void ShowGameClearThenAchievement();
+	void ShowPendingAchievement();
+	void ShowAchievementWidget(TSubclassOf<UUserWidget> WidgetClass);
 
 	// 曲の終わりの条件（譜面の時間が曲の長さを過ぎた、かつ判定がすべて終わった）を満たしたか
 	bool IsSongEnded() const;
