@@ -207,8 +207,9 @@ void URhythmFeedbackComponent::HandleNoteJudged(ERhythmJudgement Judgement, int3
 
 	const FRhythmLaneEffects* Effects = FindLaneEffects(LaneIndex);
 
-	// 判定エフェクト（通常・始点・終点共通）
-	if (Effects)
+	// 判定エフェクト。ホールドの始点・終点はロングノーツ用のエフェクト（charge / burst）だけにする（設定で戻せる）
+	const bool bHoldPoint = (Point != ENoteJudgePoint::Tap);
+	if (Effects && (!bHoldPoint || bShowJudgementEffectOnHold))
 	{
 		SpawnEffect(Effects->Judgement.Get(Judgement), LaneIndex);
 	}
