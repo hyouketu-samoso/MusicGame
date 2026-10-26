@@ -44,6 +44,12 @@ void USongSelectWidget::NativeConstruct()
 
 	SpeedButtons = { SpeedButton1, SpeedButton2, SpeedButton3, SpeedButton4, SpeedButton5 };
 
+	// 難易度のボタン(3〜5番目は、WBP に置いてあるときだけ使う)
+	DifficultyButtons = { NormalButton, HardButton, DifficultyButton3, DifficultyButton4, DifficultyButton5 };
+	if (DifficultyButton3) { DifficultyButton3->OnClicked.AddDynamic(this, &USongSelectWidget::HandleDifficulty3); }
+	if (DifficultyButton4) { DifficultyButton4->OnClicked.AddDynamic(this, &USongSelectWidget::HandleDifficulty4); }
+	if (DifficultyButton5) { DifficultyButton5->OnClicked.AddDynamic(this, &USongSelectWidget::HandleDifficulty5); }
+
 	// 初期状態
 	bClosing = false;
 	SetRenderOpacity(1.0f);
@@ -128,8 +134,15 @@ void USongSelectWidget::SetSongTitle(const FText& Title)
 
 void USongSelectWidget::SetSelectedDifficulty(ESongDifficulty Difficulty)
 {
-	SetButtonToggledOn(NormalButton, Difficulty == ESongDifficulty::Normal);
-	SetButtonToggledOn(HardButton, Difficulty == ESongDifficulty::Hard);
+	// 5つの難易度のうち、選んだものだけを「選択中」の見た目にする(無いボタンは飛ばす)
+	const int32 Selected = static_cast<int32>(Difficulty);
+	for (int32 i = 0; i < DifficultyButtons.Num(); ++i)
+	{
+		if (DifficultyButtons[i])
+		{
+			SetButtonToggledOn(DifficultyButtons[i], i == Selected);
+		}
+	}
 }
 
 void USongSelectWidget::SetSelectedSpeed(int32 Speed)
@@ -169,14 +182,29 @@ void USongSelectWidget::HandleHard()
 	SelectDifficulty(ESongDifficulty::Hard);
 }
 
+void USongSelectWidget::HandleDifficulty3() { SelectDifficulty(ESongDifficulty::Difficulty3); }
+void USongSelectWidget::HandleDifficulty4() { SelectDifficulty(ESongDifficulty::Difficulty4); }
+void USongSelectWidget::HandleDifficulty5() { SelectDifficulty(ESongDifficulty::Difficulty5); }
+
 void USongSelectWidget::SelectDifficulty(ESongDifficulty Difficulty)
 {
 	SetSelectedDifficulty(Difficulty);
 
 	// 設定置き場に保存（プレイ画面の譜面選びに使う。速度は変えない）
-	if (URhythmSettingsSubsystem* Settings = GetRhythmSettings())
+	// ※ 設定置き場は、まだ Normal / Hard の2つだけ。3〜5番目は、保存先が増えるまで保存しない
+	//    (間違った譜面で始まらないよう、Hard などに置き換えることはしない)
+	if (Difficulty == ESongDifficulty::Normal || Difficulty == ESongDifficulty::Hard)
 	{
-		Settings->SetDifficulty(ToRhythmDifficulty(Difficulty));
+		if (URhythmSettingsSubsystem* Settings = GetRhythmSettings())
+		{
+			Settings->SetDifficulty(ToRhythmDifficulty(Difficulty));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("SongSelectWidget: 難易度 %d の保存先(RhythmSettingsSubsystem)が、まだ未対応のため、保存していない"),
+			static_cast<int32>(Difficulty));
 	}
 
 	OnDifficultySelected.Broadcast(Difficulty);
