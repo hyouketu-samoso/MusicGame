@@ -47,6 +47,16 @@ void ARhythmMusicPlayer::BeginPlay()
     }
 }
 
+void ARhythmMusicPlayer::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(MusicStartTimerHandle);
+    }
+
+    Super::EndPlay(EndPlayReason);
+}
+
 void ARhythmMusicPlayer::PlaySongByIndex(int32 Index)
 {
     if (!Songs.IsValidIndex(Index) || !Songs[Index])
@@ -132,13 +142,15 @@ void ARhythmMusicPlayer::PlayMusic()
     AudioComponent->SetSound(Sound);
 
     // w’è‚µ‚½ŠÔ‚¾‚¯‘Ò‚Á‚Ä‚©‚çÄ¶
+    TWeakObjectPtr<ARhythmMusicPlayer> WeakThis(this);
     GetWorldTimerManager().SetTimer(
         MusicStartTimerHandle,
-        [this]()
+        [WeakThis]()
         {
-            if (AudioComponent)
+            ARhythmMusicPlayer* Self = WeakThis.Get();
+            if (Self && Self->AudioComponent)
             {
-                AudioComponent->Play();
+                Self->AudioComponent->Play();
 
                 UE_LOG(
                     LogTemp,
