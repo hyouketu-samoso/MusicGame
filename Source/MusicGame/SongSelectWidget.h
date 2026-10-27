@@ -21,11 +21,11 @@ class UTextBlock;
 UENUM(BlueprintType)
 enum class ESongDifficulty : uint8
 {
+	VeryEasy,
+	Easy,
 	Normal,        // ※ Normal=0 / Hard=1 は他のファイルが使っているので、順番は変えない
 	Hard,
-	Difficulty3,   // ※ 仮の名前。難易度の名前が決まったら、変える(使っている場所も一緒に)
-	Difficulty4,
-	Difficulty5
+	VeryHard   // ※ 仮の名前。難易度の名前が決まったら、変える(使っている場所も一緒に)
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSongChangeRequested, int32, Direction);       // -1=前の曲 / +1=次の曲
@@ -112,13 +112,16 @@ protected:
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> SongPrevButton;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> SongNextButton;
 
+	// 難易度ボタン
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> VeryEasyButton;
+
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> EasyButton;
+
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> NormalButton;
+
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> HardButton;
 
-	// 3〜5番目の難易度のボタン(WBP に置いたぶんだけ使う。置かなくてもエラーにならない)
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> DifficultyButton3;
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> DifficultyButton4;
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> DifficultyButton5;
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> VeryHardButton;
 
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> SpeedButton1;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> SpeedButton2;
@@ -135,11 +138,11 @@ private:
 	// ボタンのクリック(AddDynamic には UFUNCTION が必要)
 	UFUNCTION() void HandleSongPrev();
 	UFUNCTION() void HandleSongNext();
+	UFUNCTION() void HandleVeryEasy();
+	UFUNCTION() void HandleEasy();
 	UFUNCTION() void HandleNormal();
 	UFUNCTION() void HandleHard();
-	UFUNCTION() void HandleDifficulty3();
-	UFUNCTION() void HandleDifficulty4();
-	UFUNCTION() void HandleDifficulty5();
+	UFUNCTION() void HandleVeryHard();
 	UFUNCTION() void HandleSpeed1();
 	UFUNCTION() void HandleSpeed2();
 	UFUNCTION() void HandleSpeed3();

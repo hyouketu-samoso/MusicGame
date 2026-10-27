@@ -8,15 +8,44 @@
 
 namespace
 {
-	// 画面の難易度 ⇔ 設定置き場の難易度
+	// 画面の難易度 → 設定置き場の難易度
 	ERhythmDifficulty ToRhythmDifficulty(ESongDifficulty Difficulty)
 	{
-		return Difficulty == ESongDifficulty::Hard ? ERhythmDifficulty::Hard : ERhythmDifficulty::Normal;
+		switch (Difficulty)
+		{
+		case ESongDifficulty::VeryEasy:
+			return ERhythmDifficulty::VeryEasy;
+		case ESongDifficulty::Easy:
+			return ERhythmDifficulty::Easy;
+		case ESongDifficulty::Normal:
+			return ERhythmDifficulty::Normal;
+		case ESongDifficulty::Hard:
+			return ERhythmDifficulty::Hard;
+		case ESongDifficulty::VeryHard:
+			return ERhythmDifficulty::VeryHard;
+		default:
+			return ERhythmDifficulty::Normal;
+		}
 	}
 
+	// 設定置き場の難易度 → 画面の難易度
 	ESongDifficulty ToSongDifficulty(ERhythmDifficulty Difficulty)
 	{
-		return Difficulty == ERhythmDifficulty::Hard ? ESongDifficulty::Hard : ESongDifficulty::Normal;
+		switch (Difficulty)
+		{
+		case ERhythmDifficulty::VeryEasy:
+			return ESongDifficulty::VeryEasy;
+		case ERhythmDifficulty::Easy:
+			return ESongDifficulty::Easy;
+		case ERhythmDifficulty::Normal:
+			return ESongDifficulty::Normal;
+		case ERhythmDifficulty::Hard:
+			return ESongDifficulty::Hard;
+		case ERhythmDifficulty::VeryHard:
+			return ESongDifficulty::VeryHard;
+		default:
+			return ESongDifficulty::Normal;
+		}
 	}
 }
 
@@ -32,8 +61,11 @@ void USongSelectWidget::NativeConstruct()
 
 	SongPrevButton->OnClicked.AddDynamic(this, &USongSelectWidget::HandleSongPrev);
 	SongNextButton->OnClicked.AddDynamic(this, &USongSelectWidget::HandleSongNext);
+	VeryEasyButton->OnClicked.AddDynamic(this, &USongSelectWidget::HandleVeryEasy);
+	EasyButton->OnClicked.AddDynamic(this, &USongSelectWidget::HandleEasy);
 	NormalButton->OnClicked.AddDynamic(this, &USongSelectWidget::HandleNormal);
 	HardButton->OnClicked.AddDynamic(this, &USongSelectWidget::HandleHard);
+	VeryHardButton->OnClicked.AddDynamic(this, &USongSelectWidget::HandleVeryHard);
 	SpeedButton1->OnClicked.AddDynamic(this, &USongSelectWidget::HandleSpeed1);
 	SpeedButton2->OnClicked.AddDynamic(this, &USongSelectWidget::HandleSpeed2);
 	SpeedButton3->OnClicked.AddDynamic(this, &USongSelectWidget::HandleSpeed3);
@@ -45,10 +77,7 @@ void USongSelectWidget::NativeConstruct()
 	SpeedButtons = { SpeedButton1, SpeedButton2, SpeedButton3, SpeedButton4, SpeedButton5 };
 
 	// 難易度のボタン(3〜5番目は、WBP に置いてあるときだけ使う)
-	DifficultyButtons = { NormalButton, HardButton, DifficultyButton3, DifficultyButton4, DifficultyButton5 };
-	if (DifficultyButton3) { DifficultyButton3->OnClicked.AddDynamic(this, &USongSelectWidget::HandleDifficulty3); }
-	if (DifficultyButton4) { DifficultyButton4->OnClicked.AddDynamic(this, &USongSelectWidget::HandleDifficulty4); }
-	if (DifficultyButton5) { DifficultyButton5->OnClicked.AddDynamic(this, &USongSelectWidget::HandleDifficulty5); }
+	DifficultyButtons = {VeryEasyButton,EasyButton, NormalButton, HardButton,VeryHardButton};
 
 	// 初期状態
 	bClosing = false;
@@ -172,6 +201,16 @@ void USongSelectWidget::CloseWithFade()
 void USongSelectWidget::HandleSongPrev() { OnSongChangeRequested.Broadcast(-1); }
 void USongSelectWidget::HandleSongNext() { OnSongChangeRequested.Broadcast(+1); }
 
+void USongSelectWidget::HandleVeryEasy()
+{
+	SelectDifficulty(ESongDifficulty::VeryEasy);
+}
+
+void USongSelectWidget::HandleEasy()
+{
+	SelectDifficulty(ESongDifficulty::Easy);
+}
+
 void USongSelectWidget::HandleNormal()
 {
 	SelectDifficulty(ESongDifficulty::Normal);
@@ -182,29 +221,19 @@ void USongSelectWidget::HandleHard()
 	SelectDifficulty(ESongDifficulty::Hard);
 }
 
-void USongSelectWidget::HandleDifficulty3() { SelectDifficulty(ESongDifficulty::Difficulty3); }
-void USongSelectWidget::HandleDifficulty4() { SelectDifficulty(ESongDifficulty::Difficulty4); }
-void USongSelectWidget::HandleDifficulty5() { SelectDifficulty(ESongDifficulty::Difficulty5); }
+void USongSelectWidget::HandleVeryHard()
+{
+	SelectDifficulty(ESongDifficulty::VeryHard);
+}
 
 void USongSelectWidget::SelectDifficulty(ESongDifficulty Difficulty)
 {
 	SetSelectedDifficulty(Difficulty);
 
-	// 設定置き場に保存（プレイ画面の譜面選びに使う。速度は変えない）
-	// ※ 設定置き場は、まだ Normal / Hard の2つだけ。3〜5番目は、保存先が増えるまで保存しない
-	//    (間違った譜面で始まらないよう、Hard などに置き換えることはしない)
-	if (Difficulty == ESongDifficulty::Normal || Difficulty == ESongDifficulty::Hard)
+	// 選択した難易度を設定置き場に保存する
+	if (URhythmSettingsSubsystem* Settings = GetRhythmSettings())
 	{
-		if (URhythmSettingsSubsystem* Settings = GetRhythmSettings())
-		{
-			Settings->SetDifficulty(ToRhythmDifficulty(Difficulty));
-		}
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("SongSelectWidget: 難易度 %d の保存先(RhythmSettingsSubsystem)が、まだ未対応のため、保存していない"),
-			static_cast<int32>(Difficulty));
+		Settings->SetDifficulty(ToRhythmDifficulty(Difficulty));
 	}
 
 	OnDifficultySelected.Broadcast(Difficulty);
