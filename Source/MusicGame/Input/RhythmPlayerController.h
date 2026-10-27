@@ -63,6 +63,10 @@ public:
 	UPROPERTY()
 	TObjectPtr<ABackVideoActor> BackVideo;
 
+	// リトライで開き直したレベルか(背景動画が、リトライかタイトルかを見分けるために聞く)
+	// 「リトライの印」は読むと消えるので、最初に聞かれたときに読んで、答えを覚えておく
+	bool IsRetryStart();
+
 	// 調整画面を開いている間、ポーズの開閉入力を無視する（WBP から呼ぶ）
 	UFUNCTION(BlueprintCallable, Category = "Rhythm|Pause")
 	void SetPauseInputBlocked(bool bBlocked);
@@ -95,7 +99,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<USongSelectWidget> SongSelectWidgetClass;
 
-	UPROPERTY(EditAnywhere,BlueprintReadOnly,Category = "UI")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<UTimingAdjustWidget>TimingAdjustWidgetClass;
 
 private:
@@ -132,6 +136,10 @@ private:
 	TObjectPtr<class ANoteSpawner> NoteSpawner;
 
 	bool bStartRequested = false;
+
+	// IsRetryStart の答え
+	bool bRetryChecked = false;
+	bool bRetryStartValue = false;
 
 	bool bPauseInputBlocked = false;
 	double PauseInputIgnoreUntil = 0.0;

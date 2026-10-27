@@ -23,6 +23,22 @@ ARhythmPlayerController::ARhythmPlayerController()
 		CreateDefaultSubobject<URhythmInputComponent>(TEXT("RhythmInput"));
 }
 
+bool ARhythmPlayerController::IsRetryStart()
+{
+	if (!bRetryChecked)
+	{
+		bRetryChecked = true;
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (UGameSessionSubsystem* Session = GI->GetSubsystem<UGameSessionSubsystem>())
+			{
+				bRetryStartValue = Session->ConsumeSkipSongSelect();
+			}
+		}
+	}
+	return bRetryStartValue;
+}
+
 void ARhythmPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -94,23 +110,14 @@ void ARhythmPlayerController::BeginPlay()
 
 	// リトライで開き直したときは、曲選択を出さずに、前回の曲でそのまま始める
 	// (印は、読むと消える。その次に開いたときは、ふつうに曲選択が出る)
-	if (IsLocalPlayerController())
+	if (IsLocalPlayerController() && IsRetryStart())
 	{
-		if (UGameInstance* GI = GetGameInstance())
-		{
-			if (UGameSessionSubsystem* Session = GI->GetSubsystem<UGameSessionSubsystem>())
-			{
-				if (Session->ConsumeSkipSongSelect())
-				{
-					SetInputMode(FInputModeGameOnly());
-					bShowMouseCursor = false;
+		SetInputMode(FInputModeGameOnly());
+		bShowMouseCursor = false;
 
-					// MusicPlayer / NoteSpawner の BeginPlay が終わってから始めるため、次のフレームに回す
-					GetWorldTimerManager().SetTimerForNextTick(this, &ARhythmPlayerController::StartRetrySong);
-					return;
-				}
-			}
-		}
+		// MusicPlayer / NoteSpawner の BeginPlay が終わってから始めるため、次のフレームに回す
+		GetWorldTimerManager().SetTimerForNextTick(this, &ARhythmPlayerController::StartRetrySong);
+		return;
 	}
 
 	// 曲選択を、一番手前に出す
@@ -198,6 +205,9 @@ void ARhythmPlayerController::HandleSongSelectClosed()
 				}
 			}
 		}
+
+		// タイトルで止めておいた背景動画を再生する
+		if (BackVideo) { BackVideo->ReleaseFromTitle(); }
 
 		// 選んだ曲の譜面を読み込んで、開始する(失敗したときは、ログを出して、何もせず戻る)
 		StartSelectedSong();
