@@ -12,6 +12,8 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
+#include "Sound/SoundClass.h"
+#include "Components/AudioComponent.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -33,6 +35,13 @@ URhythmGameFlowComponent::URhythmGameFlowComponent()
 	{
 		RetryWidgetClass = GameOverWidgetFinder.Class;
 	}
+
+	// ゲームオーバー画面を開く瞬間の SE と、SE 音量スライダーが効く Sound Class
+	static ConstructorHelpers::FObjectFinder<USoundBase> GameOverSoundFinder(TEXT("/Game/MusicGame/Sound_P/Sound_SE/SE_system_failed.SE_system_failed"));
+	GameOverSound = GameOverSoundFinder.Object;
+
+	static ConstructorHelpers::FObjectFinder<USoundClass> SEClassFinder(TEXT("/Game/MusicGame/Sound_P/Sound_Goto/SCL_SE.SCL_SE"));
+	GameOverSoundClass = SEClassFinder.Object;
 }
 
 void URhythmGameFlowComponent::BindJudge(ARhythmJudge* InJudge)
@@ -395,9 +404,34 @@ void URhythmGameFlowComponent::ShowResultScreen()
 	ShownWidget = Result;
 }
 
+void URhythmGameFlowComponent::PlayGameOverSound()
+{
+	if (!GameOverSound)
+	{
+		return;
+	}
+
+	UAudioComponent* Audio = UGameplayStatics::CreateSound2D(this, GameOverSound);
+	if (!Audio)
+	{
+		return;
+	}
+
+	// 画面を開くとゲームが一時停止するので、一時停止中でも鳴る UI 用の音にする（鳴り終わったら自動で破棄）
+	Audio->bIsUISound = true;
+	if (GameOverSoundClass)
+	{
+		Audio->SoundClassOverride = GameOverSoundClass;
+	}
+	Audio->Play();
+}
+
 void URhythmGameFlowComponent::ShowRetryScreen()
 {
 	OnRetryScreenRequested.Broadcast();
+
+	// ゲームオーバー画面を開く瞬間の SE
+	PlayGameOverSound();
 
 	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
 	if (!PC || !RetryWidgetClass)
