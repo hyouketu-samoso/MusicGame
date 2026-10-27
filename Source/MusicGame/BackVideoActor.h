@@ -61,12 +61,29 @@ public:
 	void PauseVideos();
 	void ResumeVideos();
 
+	// タイトルからゲームを始めるとき: タイトルで止めておいた動画を再生する
+	void ReleaseFromTitle();
+
+	// タイトルからゲームを始めるときの、動画の開始位置(秒)。リトライ用の RestartSeconds とは別
+	// 0 なら動画の頭から。冒頭の黒(フェード)を短くしたいときは大きくする
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Video", meta = (ClampMin = "0.0", Units = "s"))
+	float TitleStartSeconds = 1.3f;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
 	void SetupSlot(UStaticMeshComponent* Mesh, const FBackVideoSlot& InSlot);
+
+	// タイトルのとき: 動画を止めて 0 秒へ移動だけしておく(再生はしない)
+	void ParkAtTitle(const FBackVideoSlot& InSlot);
+
+	// リトライで開き直したレベルか
+	bool IsRetryStart() const;
+
+	// タイトルで 0 秒へ移動している最中か(Slot1 / Slot2)
+	bool bTitleSeekPending[2] = { false, false };
 
 	// Seek が終わったら再生を始める
 	UFUNCTION()

@@ -10,6 +10,7 @@
 #include "MediaSource.h"
 #include "MediaTexture.h"
 #include "UObject/ConstructorHelpers.h"
+#include "input/RhythmPlayerController.h"
 
 ABackVideoActor::ABackVideoActor()
 {
@@ -81,6 +82,13 @@ void ABackVideoActor::SetupSlot(UStaticMeshComponent* Mesh, const FBackVideoSlot
 
 		if (bAlreadyOpen)
 		{
+			// タイトルに戻ったとき(リトライ以外)は、流さずに 0 秒で止めておく
+			if (!IsRetryStart())
+			{
+				ParkAtTitle(InSlot);
+				return;
+			}
+
 			const int32 Idx = (&InSlot == &Slot2) ? 1 : 0;
 
 			InSlot.Player->SetLooping(true);
@@ -116,6 +124,18 @@ void ABackVideoActor::SetupSlot(UStaticMeshComponent* Mesh, const FBackVideoSlot
 
 void ABackVideoActor::HandleSeekCompleted()
 {
+	// タイトルで開始位置へ移動していた動画は、移動が終わった
+	const FBackVideoSlot* Slots[2] = { &Slot1, &Slot2 };
+	for (int32 i = 0; i < 2; ++i)
+	{
+		// 移動先に近い位置になったら完了とみなす(動画によっては、少しずれた位置に止まるため、余裕を持たせる)
+		if (bTitleSeekPending[i] && Slots[i]->Player &&
+			FMath::Abs(Slots[i]->Player->GetTime().GetTotalSeconds() - TitleStartSeconds) < 0.5)
+		{
+			bTitleSeekPending[i] = false;
+		}
+	}
+
 	PlayWaitingVideos();
 }
 
@@ -142,4 +162,94 @@ void ABackVideoActor::ResumeVideos()
 {
 	if (Slot1.Player && Slot1.Player->IsPaused()) { Slot1.Player->Play(); }
 	if (Slot2.Player && Slot2.Player->IsPaused()) { Slot2.Player->Play(); }
+}
+
+bool ABackVideoActor::IsRetryStart() const
+{
+	// リトライかどうかは、RhythmPlayerController が持っている(印は読むと消えるので、コントローラーが覚えている)
+	if (const UWorld* World = GetWorld())
+	{
+		if (ARhythmPlayerController* PC = Cast<ARhythmPlayerController>(World->GetFirstPlayerController()))
+		{
+			return PC->IsRetryStart();
+		}
+	}
+
+	// 分からないときは、これまでどおりリトライの動き(1.5秒から再生)にする
+	UE_LOG(LogTemp, Warning, TEXT("BackVideo: PlayerController not found, treated as retry"));
+	return true;
+}
+
+// タイトル用: 止めて TitleStartSeconds へ移動だけしておく(再生はしない)
+void ABackVideoActor::ParkAtTitle(const FBackVideoSlot& InSlot)
+{
+	UMediaPlayer* P = InSlot.Player;
+	if (!P) { return; }
+
+	const int32 Idx = (&InSlot == &Slot2) ? 1 : 0;
+
+	P->SetLooping(true);
+	P->Pause();
+
+	// すでにその位置なら、移動しない(同じ位置への移動は完了の通知が来ないことがあるため)
+	if (FMath::Abs(P->GetTime().GetTotalSeconds() - TitleStartSeconds) < 0.05)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BackVideo: ParkAtTitle slot %d (already at start)"), Idx);
+		return;
+	}
+
+	P->OnSeekCompleted.AddUniqueDynamic(this, &ABackVideoActor::HandleSeekCompleted);
+
+	if (P->Seek(FTimespan::FromSeconds(TitleStartSeconds)))
+	{
+		bTitleSeekPending[Idx] = true;
+		UE_LOG(LogTemp, Warning, TEXT("BackVideo: ParkAtTitle slot %d seeking to %.2f"), Idx, TitleStartSeconds);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BackVideo: ParkAtTitle seek failed (slot %d)"), Idx);
+	}
+}
+
+// タイトルからスタート: 止めておいた動画を再生する(開始位置への移動はタイトルで済んでいる)
+void ABackVideoActor::ReleaseFromTitle()
+{
+	const FBackVideoSlot* Slots[2] = { &Slot1, &Slot2 };
+	bool bNeedFallback = false;
+
+	for (int32 i = 0; i < 2; ++i)
+	{
+		UMediaPlayer* P = Slots[i]->Player;
+		if (!P) { continue; }
+
+		UE_LOG(LogTemp, Warning, TEXT("BackVideo: ReleaseFromTitle slot %d (ready=%d time=%.2f seekPending=%d)"),
+			i, P->IsReady(), P->GetTime().GetTotalSeconds(), bTitleSeekPending[i]);
+
+		if (!P->IsReady()) { continue; }
+
+		P->SetLooping(true);
+
+		// 通知が来ていなくても、すでに開始位置の近くまで移動できていれば、移動は終わっているとみなす
+		if (bTitleSeekPending[i] &&
+			FMath::Abs(P->GetTime().GetTotalSeconds() - TitleStartSeconds) < 0.5)
+		{
+			bTitleSeekPending[i] = false;
+		}
+
+		if (bTitleSeekPending[i])
+		{
+			// 開始位置への移動がまだ終わっていないとき(スタートを押すのが早かった)は、終わってから再生する
+			bWaitSeek[i] = true;
+			bNeedFallback = true;
+		}
+		else
+		{
+			P->Play();
+		}
+	}
+
+	if (bNeedFallback)
+	{
+		GetWorldTimerManager().SetTimer(SeekFallbackTimer, this, &ABackVideoActor::PlayWaitingVideos, 1.0f, false);
+	}
 }
