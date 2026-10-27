@@ -279,11 +279,22 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Numbers")
 	FVector2D SmallDigitSize = FVector2D(32.0, 48.0);
 
-	// 難易度の画像
+	// 判定の数・MAX COMBO を、右詰めにする桁数(FAST / LATE は、右詰めにしない)
+	// (例: 4 なら、4桁ぶんの幅を空けて、右にそろえる。0 にすると、右詰めにしない = 左詰め)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Numbers", meta = (ClampMin = "0"))
+	int32 CountRightAlignDigits = 4;
+
+	// 難易度の画像(5つ。曲選択の難易度と同じ。未設定の難易度は、文字を出す)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Images")
+	TObjectPtr<UTexture2D> VeryEasyDifficultyTexture;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Images")
+	TObjectPtr<UTexture2D> EasyDifficultyTexture;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Images")
 	TObjectPtr<UTexture2D> NormalDifficultyTexture;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Images")
 	TObjectPtr<UTexture2D> HardDifficultyTexture;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Images")
+	TObjectPtr<UTexture2D> VeryHardDifficultyTexture;
 
 	// ---- 数字を並べる入れ物(WBP に Horizontal Box を置いて、同じ名前にする。無くても動く)----
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UHorizontalBox> ScoreIntBox;
@@ -364,13 +375,17 @@ private:
 	// スコア(0.00 から 100.00)から、ランクを決める
 	ERhythmRank ScoreToRank(float Score) const;
 
+	// 難易度に合った画像を返す(未設定なら nullptr)
+	UTexture2D* GetDifficultyTexture(ESongDifficulty Difficulty) const;
+
 	// 画像と文字の切り替え
 	//  bShow が false: 両方隠す / 画像の部品と画像がある: 画像を出して文字を隠す / ない: 文字を出す
 	void ShowImageOrText(UImage* Image, UTexture2D* Texture, UTextBlock* Text, bool bShow);
 
 	// 数字の文字列(例: "0123"、".45")を、数字の画像で並べる
 	//  画像が出せたら true(Text は隠す)/ 出せないとき(入れ物か画像が無い)は false(Text に Fallback を出す)
-	bool ShowNumber(UHorizontalBox* Box, UTextBlock* Text, const FString& Digits, const FVector2D& Size, const FString& FallbackText);
+	//  PadToDigits が 1 以上のとき、桁が足りない分だけ、左に空白を入れる(右詰めになる)
+	bool ShowNumber(UHorizontalBox* Box, UTextBlock* Text, const FString& Digits, const FVector2D& Size, const FString& FallbackText, int32 PadToDigits = 0);
 
 	// ---- 順番表示 ----
 	// スコア(100倍した整数)を、画像の数字(または文字)で出す
