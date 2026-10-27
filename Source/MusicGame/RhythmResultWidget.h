@@ -13,6 +13,9 @@
 //  時間 : 表示している間はゲームを止める(ポーズ)。消えるときに解除する
 //  素材 : ランク / ALL PERFECT・FULL COMBO / NEW RECORD は、画像でも表示できる
 //         (画像の部品と画像が両方そろっていれば画像、そろっていなければ、いままでの文字を出す)
+//  順番表示 : 土台 → 難易度 → 判定(1項目ずつ) → MAX COMBO → FAST / LATE → SCORE(スロットのように回って、左の桁から止まる)
+//             → RANK → FULL COMBO(達成時のみ) → NEW RECORD(達成時のみ) → ボタン、の順に出す
+//             ボタンが出るまでは、操作できない。効果音は、クラス既定値に入れるだけで鳴る(空なら鳴らさない)
 //  操作 : マウス・キーボード・ゲームパッドで、リトライ / タイトルを選べる
 //         (十字キー・左スティックで移動、○ボタン(Xbox の B)で決定。×ボタンでは決定しない)
 // ============================================================
@@ -28,6 +31,9 @@ class UTextBlock;
 class UImage;
 class UHorizontalBox;
 class UTexture2D;
+class UWidget;
+class USoundBase;
+class UAudioComponent;
 
 UENUM(BlueprintType)
 enum class ERhythmRank : uint8
@@ -113,6 +119,81 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Fade")
 	float FadeOutDuration = 0.4f;
+
+	// ---- 順番表示の調整値(秒) ----
+	// 土台が出てから、最初の項目(難易度)が出るまで
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Sequence", meta = (ClampMin = "0.0"))
+	float StartDelay = 0.4f;
+
+	// 段階と段階の間(難易度 → 判定 → MAX COMBO → FAST/LATE → SCORE → RANK → ...)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Sequence", meta = (ClampMin = "0.0"))
+	float StepInterval = 0.5f;
+
+	// 判定一覧の1項目ごとの間(PERFECT → GREAT → ... / FAST → LATE)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Sequence", meta = (ClampMin = "0.0"))
+	float JudgeItemInterval = 0.2f;
+
+	// 1つの項目が、透明から見えるまで
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Sequence", meta = (ClampMin = "0.01"))
+	float RevealFadeDuration = 0.25f;
+
+	// 項目が出るときの、すべり込みの距離(ピクセル。0 にすると、その場でふわっと出るだけ)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Sequence")
+	FVector2D RevealSlide = FVector2D(0.0, 14.0);
+
+	// SCORE がスロットのように回り始めてから、最後の桁が止まるまでの時間
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Sequence", meta = (ClampMin = "0.1"))
+	float ScoreCountDuration = 2.0f;
+
+	// 回っている数字が、次の数字に変わる間隔(秒。小さいほど速く回る)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Sequence", meta = (ClampMin = "0.01"))
+	float SlotChangeInterval = 0.05f;
+
+	// 桁が、左から1つずつ止まっていく間隔(秒。0 にすると、全部の桁が同時に止まる)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Sequence", meta = (ClampMin = "0.0"))
+	float SlotStopInterval = 0.25f;
+
+	// true: スコアを「005.00」のように、0 を付けて3桁で出す(ゲーム中の表示と同じ)
+	// false: 止まったあとは「5.00」のように、0 を付けずに出す
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Sequence")
+	bool bScoreLeadingZeros = true;
+
+	// 桁が1つ止まるたびに鳴る音(最後の桁は、ScoreFixSE が鳴る。空なら鳴らさない)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
+	TObjectPtr<USoundBase> ScoreDigitStopSE;
+
+	// ---- 効果音(あとで、クラス既定値に入れるだけ。空なら鳴らさない) ----
+	// 土台が出た瞬間(1回)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
+	TObjectPtr<USoundBase> OpenSE;
+
+	// SCORE が増えている間(ループする音を設定する。止まるとき自動で止める)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
+	TObjectPtr<USoundBase> ScoreCountSE;
+
+	// SCORE が最終値で止まったとき(1回)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
+	TObjectPtr<USoundBase> ScoreFixSE;
+
+	// ランクが出たとき(1回。全ランク共通)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
+	TObjectPtr<USoundBase> RankSE;
+
+	// FULL COMBO / ALL PERFECT のバッジが出たとき(1回)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
+	TObjectPtr<USoundBase> FullComboSE;
+
+	// NEW RECORD のバッジが出たとき(1回)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
+	TObjectPtr<USoundBase> NewRecordSE;
+
+	// ボタンの選択を動かしたとき(SE_UI_Move)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
+	TObjectPtr<USoundBase> MoveSE;
+
+	// ボタンを決定したとき(SE_UI_Decide)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
+	TObjectPtr<USoundBase> DecideSE;
 
 	// 表示している間、ゲームを止める(ポーズする)かどうか
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result")
@@ -239,6 +320,23 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> NewRecordText;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> FastLateText;
 
+	// ---- 順番表示の「ひとまとまり」(WBP で、ラベルと数字を Overlay などでまとめて、同じ名前にする) ----
+	// 置かなくても動く(その場合は、数字・画像の部品だけが、順番に出る。ラベルは最初から見える)
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> PlayInfoGroup;   // 難易度(と曲名)
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> PerfectGroup;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> GreatGroup;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> GoodGroup;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> BadGroup;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> MissGroup;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> MaxComboGroup;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> FastGroup;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> LateGroup;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> ScoreGroup;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> RankGroup;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> BadgeGroup;       // FULL COMBO / ALL PERFECT
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> NewRecordGroup;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UWidget> ButtonsGroup;     // ボタンの中身(枠は含めない)
+
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> RetryButton;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> TitleButton;
 
@@ -274,6 +372,37 @@ private:
 	//  画像が出せたら true(Text は隠す)/ 出せないとき(入れ物か画像が無い)は false(Text に Fallback を出す)
 	bool ShowNumber(UHorizontalBox* Box, UTextBlock* Text, const FString& Digits, const FVector2D& Size, const FString& FallbackText);
 
+	// ---- 順番表示 ----
+	// スコア(100倍した整数)を、画像の数字(または文字)で出す
+	void ShowScoreHundredths(int32 Hundredths);
+
+	// 5桁の数字の文字列(例: "01234")を、「012」「.34」に分けて出す(スロットの回転中にも使う)
+	void ShowScoreDigits(const FString& FiveDigits);
+
+	// 各段階の、出す部品の一覧を作る(ひとまとまりがあればそれ、無ければ数字や画像の部品)
+	void BuildTargetTables();
+
+	// 順番表示の前に、すべての部品を、見えない状態にする
+	void HideAllForSequence();
+
+	// 順番表示の予定表を作る(達成していない段階は、飛ばす)
+	void BuildSequence();
+
+	// 順番表示を進める(Revealing の間、毎フレーム)
+	void TickSequence(float DeltaTime);
+
+	// 部品を、見えるようにし始める
+	void StartReveal(UWidget* Target);
+
+	// 出ている最中の部品の、透明度と位置を進める
+	void UpdateActiveReveals();
+
+	// 効果音を鳴らす(空なら何もしない。ポーズ中も鳴る)
+	void PlaySE(USoundBase* Sound);
+
+	// スコアが増えている間のループ音を止める
+	void StopCountAudio();
+
 	// ゲームパッド操作の準備(UI 操作に切り替える。選択はコードで管理するので、ボタンにはフォーカスしない)
 	void SetupGamepadFocus();
 
@@ -289,6 +418,55 @@ private:
 	int32 LastFocusIndex = -2;         // 前回、見た目に反映した選択(-2 = 未設定)
 	int32 SelectedIndex = 0;           // いま選んでいるボタン(0=リトライ / 1=タイトル)
 
+	// 順番表示の1段階分の予定
+	enum class EStepKind : uint8
+	{
+		Reveal,       // 部品を出す(効果音つき)
+		ScoreStart,   // SCORE を出して、数え始める
+		ScoreEnd,     // 数え終わる(最終値で止める)
+		Buttons       // ボタンを出して、操作できるようにする
+	};
+
+	struct FRevealStep
+	{
+		float Time = 0.0f;
+		EStepKind Kind = EStepKind::Reveal;
+		TArray<TWeakObjectPtr<UWidget>> Targets;
+		USoundBase* SE = nullptr;
+	};
+
+	struct FActiveReveal
+	{
+		TWeakObjectPtr<UWidget> Widget;
+		float StartTime = 0.0f;
+	};
+
+	// 各段階で出す部品(NativeConstruct で作る)
+	TArray<TWeakObjectPtr<UWidget>> PlayInfoTargets, PerfectTargets, GreatTargets, GoodTargets, BadTargets,
+		MissTargets, MaxComboTargets, FastTargets, LateTargets, ScoreTargets, RankTargets, BadgeTargets,
+		NewRecordTargets, ButtonsTargets;
+
+	TArray<FRevealStep> Steps;
+	int32 NextStep = 0;
+	TArray<FActiveReveal> ActiveReveals;
+
+	// 各部品の、もともとの Render Transform の移動量(WBP で動かしてある分を、演出で消さないため)
+	TMap<TWeakObjectPtr<UWidget>, FVector2D> BaseTranslation;
+	float SeqElapsed = 0.0f;           // 順番表示を始めてからの秒数
+	bool bButtonsStepDone = false;     // ボタンを出す段階に入ったか
+
+	// スコアの数え上げ
+	bool bCounting = false;
+	float CountStartTime = 0.0f;
+	int32 LastCountShown = -1;
+	int32 LastStoppedDigits = 0;       // これまでに止まった桁の数(止まる音を鳴らすため)
+	int32 FinalHundredths = 0;         // 最終スコア(100倍した整数)
+	bool bBadgeEarned = false;         // FULL COMBO / ALL PERFECT を達成したか
+	bool bNewRecordEarned = false;     // 記録を更新したか
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAudioComponent> CountAudio;   // 数え上げ中のループ音
+
 	// どのボタンが押されたか(フェードアウトが終わるまで覚えておく)
 	enum class EPendingAction : uint8
 	{
@@ -301,8 +479,9 @@ private:
 
 	enum class EState : uint8
 	{
-		FadingIn,
-		Shown,
+		FadingIn,     // 土台が見えてくる
+		Revealing,    // 項目を順番に出している(操作できない)
+		Shown,        // 全部出て、操作できる
 		FadingOut
 	};
 

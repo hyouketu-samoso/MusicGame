@@ -22,6 +22,9 @@
 #include "InputCoreTypes.h"   // EKeys(ゲームパッドのボタン名)
 #include "GameSessionSubsystem.h"
 #include "UObject/UnrealType.h"
+#include "Components/Widget.h"
+#include "Components/AudioComponent.h"
+#include "Sound/SoundBase.h"
 
 // ボタンを「フォーカスしない」にする(UE標準の青い枠線が出なくなる)
 // (エンジンのバージョンでプロパティ名が違っても動くよう、名前で探して設定する)
@@ -103,6 +106,16 @@ void URhythmResultWidget::NativeConstruct()
 	ElapsedFade = 0.0f;
 	SetRenderOpacity(0.0f);
 
+	// 順番表示の準備: 出す部品を集めて、全部を見えない状態にする
+	// (ボタンは、順番の最後に出るまで、押せないようにする)
+	BuildTargetTables();
+	HideAllForSequence();
+	RetryButton->SetVisibility(ESlateVisibility::HitTestInvisible);
+	TitleButton->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+	// 土台が出る瞬間の効果音
+	PlaySE(OpenSE);
+
 	// キーボードやパッドの操作(フォーカス)は、最初の NativeTick で設定する
 	// (画面に出たあとでないと、フォーカスが付かないことがあるため)
 
@@ -117,6 +130,7 @@ void URhythmResultWidget::NativeConstruct()
 // 画面から外れるときに呼ばれる。どんな消え方でも、ポーズを必ず戻す
 void URhythmResultWidget::NativeDestruct()
 {
+	StopCountAudio();
 	RestoreInputMode();   // 変えた入力モードが残っていたら戻す(通常は、消える前に戻してある)
 	ReleasePause();
 	Super::NativeDestruct();
@@ -238,9 +252,20 @@ void URhythmResultWidget::UpdateFocusVisual()
 }
 
 // 選択を動かす(2つしかないので、端で止める)
+// 演出の途中(ボタンが出る前)は、動かさない
 void URhythmResultWidget::MoveSelection(int32 Direction)
 {
-	SelectedIndex = FMath::Clamp(SelectedIndex + Direction, 0, 1);
+	if (State != EState::Shown)
+	{
+		return;
+	}
+
+	const int32 NewIndex = FMath::Clamp(SelectedIndex + Direction, 0, 1);
+	if (NewIndex != SelectedIndex)
+	{
+		SelectedIndex = NewIndex;
+		PlaySE(MoveSE);
+	}
 }
 
 // マウスを乗せたとき
@@ -268,6 +293,13 @@ void URhythmResultWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 		return;
 	}
 
+	// 項目を順番に出している間は、その進行だけを行う
+	if (State == EState::Revealing)
+	{
+		TickSequence(InDeltaTime);
+		return;
+	}
+
 	// フェードを始めてからの経過時間を進める
 	ElapsedFade += InDeltaTime;
 
@@ -281,7 +313,9 @@ void URhythmResultWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 
 		if (T >= 1.0f)
 		{
-			State = EState::Shown;   // 完全に見えたので、以降は Tick で何もしない
+			// 土台が見えたので、項目を順番に出し始める(操作は、最後まで受け付けない)
+			State = EState::Revealing;
+			BuildSequence();
 		}
 	}
 	else // EState::FadingOut
@@ -315,6 +349,10 @@ void URhythmResultWidget::SetResult(const FRhythmResultData& Data)
 		return;
 	}
 
+	// 順番表示で使う、達成のしるし(段階を出すか、飛ばすかを決める)
+	bBadgeEarned = Data.bAllPerfect || Data.bFullCombo;
+	bNewRecordEarned = Data.bNewRecord;
+
 	// ---- 曲名・難易度 ----
 	if (SongTitleText)
 	{
@@ -333,10 +371,8 @@ void URhythmResultWidget::SetResult(const FRhythmResultData& Data)
 	// 小数の誤差を避けるため、100倍して整数(例: 100.00 は 10000)にしてから分ける
 	const float Score = FMath::Clamp(Data.Score, 0.0f, 100.0f);
 	const int32 Hundredths = FMath::RoundToInt(Score * 100.0f);
-	ShowNumber(ScoreIntBox, ScoreIntText, FString::Printf(TEXT("%d"), Hundredths / 100), ScoreDigitSize,
-		FString::Printf(TEXT("%d"), Hundredths / 100));
-	ShowNumber(ScoreDecimalBox, ScoreDecimalText, FString::Printf(TEXT(".%02d"), Hundredths % 100), DecimalDigitSize,
-		FString::Printf(TEXT(".%02d"), Hundredths % 100));
+	FinalHundredths = Hundredths;
+	ShowScoreHundredths(Hundredths);
 
 	// ---- ランク(スコアから決める / Data.Rank をそのまま使う)----
 	const ERhythmRank Rank = bAutoRankFromScore ? ScoreToRank(Score) : Data.Rank;
@@ -479,6 +515,8 @@ void URhythmResultWidget::CloseWithFade()
 		return;
 	}
 
+	StopCountAudio();   // 数え上げ中のループ音が残らないようにする
+
 	State = EState::FadingOut;
 	ElapsedFade = 0.0f;
 
@@ -539,10 +577,11 @@ FReply URhythmResultWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry, 
 
 void URhythmResultWidget::HandleRetry()
 {
-	if (State == EState::FadingOut)
+	if (State != EState::Shown)
 	{
-		return;   // 消えている途中の連打は無視
+		return;   // 演出の途中と、消えている途中は、無視
 	}
+	PlaySE(DecideSE);
 	PendingAction = EPendingAction::Retry;   // フェードアウトが終わったあとに、やり直す
 	OnRetryRequested.Broadcast();            // 「リトライが押された」を知らせる
 	CloseWithFade();
@@ -550,10 +589,11 @@ void URhythmResultWidget::HandleRetry()
 
 void URhythmResultWidget::HandleTitle()
 {
-	if (State == EState::FadingOut)
+	if (State != EState::Shown)
 	{
 		return;
 	}
+	PlaySE(DecideSE);
 	PendingAction = EPendingAction::Title;   // フェードアウトが終わったあとに、曲選択へ戻る
 	OnTitleRequested.Broadcast();            // 「タイトルが押された」を知らせる
 	CloseWithFade();
@@ -609,5 +649,359 @@ void URhythmResultWidget::ExecutePendingAction()
 
 	default:
 		break;
+	}
+}
+
+// ============================================================
+// 順番表示
+// ============================================================
+
+// スコア(100倍した整数)を、画像の数字で出す(例: 1234 → 「12」「.34」)
+void URhythmResultWidget::ShowScoreHundredths(int32 Hundredths)
+{
+	const int32 H = FMath::Clamp(Hundredths, 0, 10000);
+	if (bScoreLeadingZeros)
+	{
+		ShowScoreDigits(FString::Printf(TEXT("%05d"), H));
+		return;
+	}
+	ShowNumber(ScoreIntBox, ScoreIntText, FString::Printf(TEXT("%d"), H / 100), ScoreDigitSize,
+		FString::Printf(TEXT("%d"), H / 100));
+	ShowNumber(ScoreDecimalBox, ScoreDecimalText, FString::Printf(TEXT(".%02d"), H % 100), DecimalDigitSize,
+		FString::Printf(TEXT(".%02d"), H % 100));
+}
+
+// 5桁の数字(例: "01234")を、整数3桁と小数2桁に分けて出す
+void URhythmResultWidget::ShowScoreDigits(const FString& FiveDigits)
+{
+	const FString IntPart = FiveDigits.Left(3);
+	const FString DecPart = FString(TEXT(".")) + FiveDigits.Right(2);
+	ShowNumber(ScoreIntBox, ScoreIntText, IntPart, ScoreDigitSize, IntPart);
+	ShowNumber(ScoreDecimalBox, ScoreDecimalText, DecPart, DecimalDigitSize, DecPart);
+}
+
+// 効果音を鳴らす(空なら何もしない。ポーズ中も鳴る UI 用の音として鳴らす)
+void URhythmResultWidget::PlaySE(USoundBase* Sound)
+{
+	if (Sound)
+	{
+		UGameplayStatics::PlaySound2D(this, Sound);
+	}
+}
+
+void URhythmResultWidget::StopCountAudio()
+{
+	if (CountAudio)
+	{
+		CountAudio->Stop();
+		CountAudio = nullptr;
+	}
+}
+
+// 各段階で出す部品の一覧を作る
+//  ひとまとまり(Group)があれば、それを出す。無ければ、数字・画像・文字の部品を出す
+void URhythmResultWidget::BuildTargetTables()
+{
+	auto Collect = [](TArray<TWeakObjectPtr<UWidget>>& Out, UWidget* Group, std::initializer_list<UWidget*> Fallbacks)
+		{
+			Out.Reset();
+			if (Group)
+			{
+				Out.Add(Group);
+				return;
+			}
+			for (UWidget* W : Fallbacks)
+			{
+				if (W)
+				{
+					Out.Add(W);
+				}
+			}
+		};
+
+	Collect(PlayInfoTargets, PlayInfoGroup, { DifficultyImage, DifficultyText, SongTitleImage, SongTitleText });
+	Collect(PerfectTargets, PerfectGroup, { PerfectBox, PerfectCountText });
+	Collect(GreatTargets, GreatGroup, { GreatBox, GreatCountText });
+	Collect(GoodTargets, GoodGroup, { GoodBox, GoodCountText });
+	Collect(BadTargets, BadGroup, { BadBox, BadCountText });
+	Collect(MissTargets, MissGroup, { MissBox, MissCountText });
+	Collect(MaxComboTargets, MaxComboGroup, { MaxComboBox, MaxComboText });
+	Collect(FastTargets, FastGroup, { FastBox, FastLateText });
+	Collect(LateTargets, LateGroup, { LateBox });
+	Collect(ScoreTargets, ScoreGroup, { ScoreIntBox, ScoreDecimalBox, ScoreIntText, ScoreDecimalText });
+	Collect(RankTargets, RankGroup, { RankImage, RankText });
+	Collect(BadgeTargets, BadgeGroup, { ClearBadgeImage, ClearBadgeText });
+	Collect(NewRecordTargets, NewRecordGroup, { NewRecordImage, NewRecordText });
+	Collect(ButtonsTargets, ButtonsGroup, { RetryButton, TitleButton });
+}
+
+// すべての部品を、見えない状態にする(順番に出すため)
+void URhythmResultWidget::HideAllForSequence()
+{
+	const TArray<TWeakObjectPtr<UWidget>>* Tables[] = {
+		&PlayInfoTargets, &PerfectTargets, &GreatTargets, &GoodTargets, &BadTargets, &MissTargets,
+		&MaxComboTargets, &FastTargets, &LateTargets, &ScoreTargets, &RankTargets, &BadgeTargets,
+		&NewRecordTargets, &ButtonsTargets };
+
+	for (const TArray<TWeakObjectPtr<UWidget>>* Table : Tables)
+	{
+		for (const TWeakObjectPtr<UWidget>& W : *Table)
+		{
+			if (W.IsValid())
+			{
+				// WBP で付けてある Render Transform の移動量を覚えておく(演出のあとに、その位置へ戻す)
+				if (!BaseTranslation.Contains(W))
+				{
+					BaseTranslation.Add(W, W->GetRenderTransform().Translation);
+				}
+				W->SetRenderOpacity(0.0f);
+				W->SetRenderTranslation(BaseTranslation[W] + RevealSlide);
+			}
+		}
+	}
+}
+
+// 順番表示の予定表を作る(時間の順に並べる)
+void URhythmResultWidget::BuildSequence()
+{
+	Steps.Reset();
+	NextStep = 0;
+	ActiveReveals.Reset();
+	SeqElapsed = 0.0f;
+	bButtonsStepDone = false;
+	bCounting = false;
+	LastCountShown = -1;
+
+	// SCORE は、0.00 から始める
+	ShowScoreHundredths(0);
+
+	float T = StartDelay;
+
+	auto AddReveal = [this](float Time, const TArray<TWeakObjectPtr<UWidget>>& Targets, USoundBase* SE)
+		{
+			FRevealStep& S = Steps.AddDefaulted_GetRef();
+			S.Time = Time;
+			S.Kind = EStepKind::Reveal;
+			S.Targets = Targets;
+			S.SE = SE;
+		};
+
+	// 2. 難易度(今回のプレイ情報)
+	AddReveal(T, PlayInfoTargets, nullptr);
+
+	// 3. 判定結果(1項目ずつ、短い間隔で)
+	T += StepInterval;
+	AddReveal(T, PerfectTargets, nullptr);
+	T += JudgeItemInterval; AddReveal(T, GreatTargets, nullptr);
+	T += JudgeItemInterval; AddReveal(T, GoodTargets, nullptr);
+	T += JudgeItemInterval; AddReveal(T, BadTargets, nullptr);
+	T += JudgeItemInterval; AddReveal(T, MissTargets, nullptr);
+
+	// 4. MAX COMBO(単独で)
+	T += StepInterval;
+	AddReveal(T, MaxComboTargets, nullptr);
+
+	// 5. FAST → LATE
+	T += StepInterval;
+	AddReveal(T, FastTargets, nullptr);
+	T += JudgeItemInterval;
+	AddReveal(T, LateTargets, nullptr);
+
+	// 6. SCORE(スロットのように回して、左の桁から止めて、最終スコアで固定する。数え始めと止めるのは、同時にしない)
+	T += StepInterval;
+	{
+		FRevealStep& S = Steps.AddDefaulted_GetRef();
+		S.Time = T;
+		S.Kind = EStepKind::ScoreStart;
+		S.Targets = ScoreTargets;
+	}
+	T += ScoreCountDuration;
+	{
+		FRevealStep& S = Steps.AddDefaulted_GetRef();
+		S.Time = T;
+		S.Kind = EStepKind::ScoreEnd;
+	}
+
+	// 7. RANK(スコアが確定したあと)
+	T += StepInterval;
+	AddReveal(T, RankTargets, RankSE);
+
+	// 8. FULL COMBO / ALL PERFECT(達成したときだけ。しなければ、飛ばす)
+	if (bBadgeEarned)
+	{
+		T += StepInterval;
+		AddReveal(T, BadgeTargets, FullComboSE);
+	}
+
+	// 9. NEW RECORD(更新したときだけ。FULL COMBO と同時にしない)
+	if (bNewRecordEarned)
+	{
+		T += StepInterval;
+		AddReveal(T, NewRecordTargets, NewRecordSE);
+	}
+
+	// 10. ボタン(出たあと、操作できるようになる)
+	T += StepInterval;
+	{
+		FRevealStep& S = Steps.AddDefaulted_GetRef();
+		S.Time = T;
+		S.Kind = EStepKind::Buttons;
+		S.Targets = ButtonsTargets;
+	}
+}
+
+// 部品を、見えるようにし始める
+void URhythmResultWidget::StartReveal(UWidget* Target)
+{
+	if (!Target)
+	{
+		return;
+	}
+	FActiveReveal& A = ActiveReveals.AddDefaulted_GetRef();
+	A.Widget = Target;
+	A.StartTime = SeqElapsed;
+}
+
+// 出ている最中の部品を進める(透明から見えるようになりながら、元の位置に収まる)
+void URhythmResultWidget::UpdateActiveReveals()
+{
+	for (int32 i = ActiveReveals.Num() - 1; i >= 0; --i)
+	{
+		UWidget* W = ActiveReveals[i].Widget.Get();
+		if (!W)
+		{
+			ActiveReveals.RemoveAtSwap(i);
+			continue;
+		}
+
+		const float T = FMath::Clamp((SeqElapsed - ActiveReveals[i].StartTime) / FMath::Max(RevealFadeDuration, 0.01f), 0.0f, 1.0f);
+		const float E = FMath::InterpEaseOut(0.0f, 1.0f, T, 2.0f);
+		W->SetRenderOpacity(E);
+		const FVector2D* Base = BaseTranslation.Find(ActiveReveals[i].Widget);
+		W->SetRenderTranslation((Base ? *Base : FVector2D::ZeroVector) + RevealSlide * (1.0f - E));
+
+		if (T >= 1.0f)
+		{
+			ActiveReveals.RemoveAtSwap(i);
+		}
+	}
+}
+
+// 順番表示を進める(毎フレーム)
+void URhythmResultWidget::TickSequence(float DeltaTime)
+{
+	SeqElapsed += DeltaTime;
+
+	// 時間が来た段階を、順番に実行する
+	while (Steps.IsValidIndex(NextStep) && Steps[NextStep].Time <= SeqElapsed)
+	{
+		const FRevealStep& Step = Steps[NextStep];
+		++NextStep;
+
+		switch (Step.Kind)
+		{
+		case EStepKind::Reveal:
+			for (const TWeakObjectPtr<UWidget>& W : Step.Targets)
+			{
+				StartReveal(W.Get());
+			}
+			PlaySE(Step.SE);
+			break;
+
+		case EStepKind::ScoreStart:
+			// SCORE(0.00)を出して、数え始める。数えている間は、ループ音を鳴らす
+			for (const TWeakObjectPtr<UWidget>& W : Step.Targets)
+			{
+				StartReveal(W.Get());
+			}
+			bCounting = true;
+			CountStartTime = SeqElapsed;
+			LastCountShown = -1;
+			LastStoppedDigits = 0;
+			if (ScoreCountSE)
+			{
+				CountAudio = UGameplayStatics::CreateSound2D(this, ScoreCountSE);
+				if (CountAudio)
+				{
+					CountAudio->bIsUISound = true;   // ポーズ中も鳴らす
+					CountAudio->Play();
+				}
+			}
+			break;
+
+		case EStepKind::ScoreEnd:
+			// 数え終わり: ループ音を止めて、最終スコアで固定して、確定の音を1回鳴らす
+			bCounting = false;
+			StopCountAudio();
+			ShowScoreHundredths(FinalHundredths);
+			PlaySE(ScoreFixSE);
+			break;
+
+		case EStepKind::Buttons:
+			for (const TWeakObjectPtr<UWidget>& W : Step.Targets)
+			{
+				StartReveal(W.Get());
+			}
+			bButtonsStepDone = true;
+			break;
+		}
+	}
+
+	// スコアをスロットのように回す(5桁。左の桁から1つずつ止まって、最後の桁が止まるのが ScoreCountDuration)
+	// 回っている桁は、数字が1つずつ増えていく(桁ごとに、少しずらして回す)
+	// 最後の桁が止まる瞬間は、ScoreEnd の段階が、最終スコアで固定する
+	if (bCounting)
+	{
+		const float Elapsed = SeqElapsed - CountStartTime;
+		const float Duration = FMath::Max(ScoreCountDuration, 0.01f);
+		const float StopInterval = FMath::Max(SlotStopInterval, 0.0f);
+		const FString Final = FString::Printf(TEXT("%05d"), FMath::Clamp(FinalHundredths, 0, 10000));
+
+		// 止まった桁の数(左から順に止まる)
+		int32 Stopped = 0;
+		for (int32 i = 0; i < 5; ++i)
+		{
+			const float StopTime = Duration - static_cast<float>(4 - i) * StopInterval;
+			if (Elapsed >= StopTime) { ++Stopped; }
+			else { break; }
+		}
+
+		const int32 RollTick = FMath::FloorToInt(Elapsed / FMath::Max(SlotChangeInterval, 0.01f));
+		const int32 Key = RollTick * 8 + Stopped;   // 数字が変わったときだけ、描き直す
+		if (Key != LastCountShown)
+		{
+			LastCountShown = Key;
+
+			FString Shown;
+			for (int32 i = 0; i < 5; ++i)
+			{
+				if (i < Stopped)
+				{
+					Shown.AppendChar(Final[i]);
+				}
+				else
+				{
+					Shown.AppendChar(static_cast<TCHAR>(TEXT('0') + ((RollTick + i * 3) % 10)));
+				}
+			}
+			ShowScoreDigits(Shown);
+
+			// 桁が止まった音(最後の桁は ScoreFixSE が鳴るので、ここでは鳴らさない)
+			if (Stopped > LastStoppedDigits)
+			{
+				LastStoppedDigits = Stopped;
+				if (Stopped < 5) { PlaySE(ScoreDigitStopSE); }
+			}
+		}
+	}
+
+	UpdateActiveReveals();
+
+	// ボタンが出きったら、操作できるようにする
+	if (bButtonsStepDone && ActiveReveals.Num() == 0)
+	{
+		RetryButton->SetVisibility(ESlateVisibility::Visible);
+		TitleButton->SetVisibility(ESlateVisibility::Visible);
+		State = EState::Shown;
 	}
 }
