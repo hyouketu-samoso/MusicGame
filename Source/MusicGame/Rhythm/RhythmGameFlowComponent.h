@@ -22,6 +22,7 @@ class ANoteSpawner;
 class ARhythmMusicPlayer;
 class URhythmScoreComponent;
 class USoundBase;
+class USoundClass;
 class UUserWidget;
 
 // リトライ画面を出すとき（ゲームオーバー）。UI 担当が Blueprint で処理するときはここに繋ぐ
@@ -116,6 +117,15 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Timing")
 	bool bStopMusicOnGameOver = false;
 
+	// ゲームオーバー画面を開く瞬間に鳴らす SE（初期値は SE_system_failed）。
+	// 画面を開くとゲームが一時停止するので、一時停止中でも鳴る UI 用の音として鳴らす
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Sound")
+	TObjectPtr<USoundBase> GameOverSound = nullptr;
+
+	// 上の SE に使う Sound Class（ポーズ画面の SE 音量スライダーが効くように SCL_SE）
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Sound")
+	TObjectPtr<USoundClass> GameOverSoundClass = nullptr;
+
 	// ---------- 曲の長さ ----------
 
 	// 曲の長さを取る BGM（手動で上書きしたいときだけ設定する）。空なら選択中の曲の BGM を使う
@@ -145,6 +155,9 @@ private:
 
 	void ShowResultScreen();
 	void ShowRetryScreen();
+
+	// ゲームオーバー画面を開く瞬間の SE（一時停止中でも鳴る UI 用の音）
+	void PlayGameOverSound();
 
 	// クリア・実績表示
 	void ShowGameClearThenAchievement();
