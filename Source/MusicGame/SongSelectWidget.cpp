@@ -4,6 +4,7 @@
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "Engine/GameInstance.h"
+#include "Engine/UserInterfaceSettings.h"   // 青い枠線(フォーカスの枠)の設定
 #include "Rhythm/RhythmSettingsSubsystem.h"
 
 namespace
@@ -59,8 +60,19 @@ void USongSelectWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	SongPrevButton->OnClicked.AddDynamic(this, &USongSelectWidget::HandleSongPrev);
-	SongNextButton->OnClicked.AddDynamic(this, &USongSelectWidget::HandleSongNext);
+	// 選んでいるボタンの青い枠線を消す
+	// (エンジンの「フォーカスの枠を描くか」の設定を、この画面が出ている間だけ「描かない」にする。
+	//  ini は書き換えない。画面が消えるときに、元に戻す)
+	if (UUserInterfaceSettings* UISettings = GetMutableDefault<UUserInterfaceSettings>())
+	{
+		if (!bFocusRuleChanged)
+		{
+			PrevRenderFocusRule = static_cast<uint8>(UISettings->RenderFocusRule);
+			bFocusRuleChanged = true;
+		}
+		UISettings->RenderFocusRule = ERenderFocusRule::Never;
+	}
+
 	VeryEasyButton->OnClicked.AddDynamic(this, &USongSelectWidget::HandleVeryEasy);
 	EasyButton->OnClicked.AddDynamic(this, &USongSelectWidget::HandleEasy);
 	NormalButton->OnClicked.AddDynamic(this, &USongSelectWidget::HandleNormal);
@@ -77,7 +89,7 @@ void USongSelectWidget::NativeConstruct()
 	SpeedButtons = { SpeedButton1, SpeedButton2, SpeedButton3, SpeedButton4, SpeedButton5 };
 
 	// 難易度のボタン(3〜5番目は、WBP に置いてあるときだけ使う)
-	DifficultyButtons = {VeryEasyButton,EasyButton, NormalButton, HardButton,VeryHardButton};
+	DifficultyButtons = { VeryEasyButton,EasyButton, NormalButton, HardButton,VeryHardButton };
 
 	// 初期状態
 	bClosing = false;
@@ -95,8 +107,22 @@ void USongSelectWidget::NativeConstruct()
 		SetSelectedSpeed(3);
 	}
 
-	// パッドや矢印キーで操作できるように、最初のフォーカスを左上(前の曲)に置く
-	SongPrevButton->SetKeyboardFocus();
+	// パッドや矢印キーで操作できるように、最初のフォーカスを、選んでいる難易度のボタンに置く
+	FocusDefaultButton();
+}
+
+// 画面が消えるときに、フォーカスの枠の設定を元に戻す(どんな消え方でも戻す)
+void USongSelectWidget::NativeDestruct()
+{
+	if (bFocusRuleChanged)
+	{
+		if (UUserInterfaceSettings* UISettings = GetMutableDefault<UUserInterfaceSettings>())
+		{
+			UISettings->RenderFocusRule = static_cast<ERenderFocusRule>(PrevRenderFocusRule);
+		}
+		bFocusRuleChanged = false;
+	}
+	Super::NativeDestruct();
 }
 
 void USongSelectWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -163,6 +189,8 @@ void USongSelectWidget::SetSongTitle(const FText& Title)
 
 void USongSelectWidget::SetSelectedDifficulty(ESongDifficulty Difficulty)
 {
+	CurrentDifficulty = Difficulty;   // 最初のフォーカスを置くボタンを決めるために覚えておく
+
 	// 5つの難易度のうち、選んだものだけを「選択中」の見た目にする(無いボタンは飛ばす)
 	const int32 Selected = static_cast<int32>(Difficulty);
 	for (int32 i = 0; i < DifficultyButtons.Num(); ++i)
@@ -197,9 +225,6 @@ void USongSelectWidget::CloseWithFade()
 }
 
 // ---- ボタンのクリック ----
-
-void USongSelectWidget::HandleSongPrev() { OnSongChangeRequested.Broadcast(-1); }
-void USongSelectWidget::HandleSongNext() { OnSongChangeRequested.Broadcast(+1); }
 
 void USongSelectWidget::HandleVeryEasy()
 {
@@ -287,14 +312,25 @@ FReply USongSelectWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry,
 }
 
 
+// 最初にフォーカスするボタン: 選んでいる難易度のボタン(無ければ、スタートボタン)
+UButton* USongSelectWidget::GetDefaultFocusButton() const
+{
+	const int32 Index = static_cast<int32>(CurrentDifficulty);
+	if (DifficultyButtons.IsValidIndex(Index) && DifficultyButtons[Index])
+	{
+		return DifficultyButtons[Index];
+	}
+	return StartButton;
+}
+
 TSharedRef<SWidget> USongSelectWidget::GetDefaultFocusWidget()
 {
-	return SongPrevButton->TakeWidget();   // StartButton → SongPrevButton
+	return GetDefaultFocusButton()->TakeWidget();
 }
 
 void USongSelectWidget::FocusDefaultButton()
 {
-	SongPrevButton->SetKeyboardFocus();    // StartButton → SongPrevButton
+	GetDefaultFocusButton()->SetKeyboardFocus();
 }
 
 FReply USongSelectWidget::NativeOnPreviewMouseButtonDown(const FGeometry& InGeometry,

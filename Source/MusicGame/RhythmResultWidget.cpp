@@ -14,6 +14,7 @@
 #include "Components/HorizontalBox.h"   // 数字を並べる入れ物
 #include "Blueprint/WidgetTree.h"        // 数字の画像をその場で作るのに必要
 #include "Components/Image.h"         // UImage を使うために必要
+#include "Components/Spacer.h"        // 右詰めの空白に使う
 #include "Engine/Texture2D.h"          // UTexture2D を使うために必要
 #include "Components/TextBlock.h"     // UTextBlock を使うために必要
 #include "Kismet/GameplayStatics.h"  // SetGamePaused を使うために必要
@@ -58,6 +59,20 @@ namespace
 		case ERhythmRank::B:  return TEXT("B");
 		case ERhythmRank::C:  return TEXT("C");
 		default:              return TEXT("D");
+		}
+	}
+
+	// 難易度の enum を、画像が無いときに出す文字に変える
+	const TCHAR* DifficultyToString(ESongDifficulty Difficulty)
+	{
+		switch (Difficulty)
+		{
+		case ESongDifficulty::VeryEasy: return TEXT("Very Easy");
+		case ESongDifficulty::Easy:     return TEXT("Easy");
+		case ESongDifficulty::Normal:   return TEXT("Normal");
+		case ESongDifficulty::Hard:     return TEXT("Hard");
+		case ESongDifficulty::VeryHard: return TEXT("Very Hard");
+		default:                        return TEXT("Normal");
 		}
 	}
 
@@ -157,6 +172,20 @@ ERhythmRank URhythmResultWidget::ScoreToRank(float Score) const
 	if (S >= RankThresholdB) { return ERhythmRank::B; }
 	if (S >= RankThresholdC) { return ERhythmRank::C; }
 	return ERhythmRank::D;
+}
+
+// 難易度に合った画像を返す(未設定なら nullptr。そのときは、文字が出る)
+UTexture2D* URhythmResultWidget::GetDifficultyTexture(ESongDifficulty Difficulty) const
+{
+	switch (Difficulty)
+	{
+	case ESongDifficulty::VeryEasy: return VeryEasyDifficultyTexture;
+	case ESongDifficulty::Easy:     return EasyDifficultyTexture;
+	case ESongDifficulty::Normal:   return NormalDifficultyTexture;
+	case ESongDifficulty::Hard:     return HardDifficultyTexture;
+	case ESongDifficulty::VeryHard: return VeryHardDifficultyTexture;
+	default:                        return NormalDifficultyTexture;
+	}
 }
 
 // 画像と文字の切り替え(デザイナーの素材が来る前は文字、来たあとは画像、をコード変更なしで切り替えられる)
@@ -360,12 +389,12 @@ void URhythmResultWidget::SetResult(const FRhythmResultData& Data)
 	}
 	ShowImageOrText(SongTitleImage, Data.SongTitleTexture, SongTitleText, true);
 
-	const bool bHard = (Data.Difficulty == ESongDifficulty::Hard);
+	// 難易度(5つ)。画像があれば画像、無ければ文字で出す
 	if (DifficultyText)
 	{
-		DifficultyText->SetText(bHard ? FText::FromString(TEXT("Hard")) : FText::FromString(TEXT("Normal")));
+		DifficultyText->SetText(FText::FromString(DifficultyToString(Data.Difficulty)));
 	}
-	ShowImageOrText(DifficultyImage, bHard ? HardDifficultyTexture.Get() : NormalDifficultyTexture.Get(), DifficultyText, true);
+	ShowImageOrText(DifficultyImage, GetDifficultyTexture(Data.Difficulty), DifficultyText, true);
 
 	// ---- スコア ----
 	// 小数の誤差を避けるため、100倍して整数(例: 100.00 は 10000)にしてから分ける
@@ -388,13 +417,14 @@ void URhythmResultWidget::SetResult(const FRhythmResultData& Data)
 	ShowImageOrText(RankImage, RankTexture, RankText, true);
 
 	// ---- 最大コンボと、各判定の数(マイナスの値が来ても 0 として扱う)----
-	const FString MaxComboStr = FString::Printf(TEXT("%04d"), FMath::Max(0, Data.MaxCombo));
-	ShowNumber(MaxComboBox, MaxComboText, MaxComboStr, SmallDigitSize, FString::Printf(TEXT("MAX COMBO :%s"), *MaxComboStr));
+	// 手前の 0 は付けない(例: 0042 ではなく 42。100 のような、後ろの 0 は、そのまま残る)
+	const FString MaxComboStr = FString::Printf(TEXT("%d"), FMath::Max(0, Data.MaxCombo));
+	ShowNumber(MaxComboBox, MaxComboText, MaxComboStr, SmallDigitSize, FString::Printf(TEXT("MAX COMBO :%s"), *MaxComboStr), CountRightAlignDigits);
 
 	auto ShowCount = [this](UHorizontalBox* Box, UTextBlock* Text, int32 Value)
 		{
-			const FString S = FString::Printf(TEXT("%04d"), FMath::Max(0, Value));
-			ShowNumber(Box, Text, S, SmallDigitSize, FString::Printf(TEXT(":%s"), *S));
+			const FString S = FString::Printf(TEXT("%d"), FMath::Max(0, Value));
+			ShowNumber(Box, Text, S, SmallDigitSize, FString::Printf(TEXT(":%s"), *S), CountRightAlignDigits);
 		};
 	ShowCount(PerfectBox, PerfectCountText, Data.PerfectCount);
 	ShowCount(GreatBox, GreatCountText, Data.GreatCount);
@@ -431,6 +461,7 @@ void URhythmResultWidget::SetResult(const FRhythmResultData& Data)
 	// 数字の画像が両方出せたら、まとめの文字は隠す。出せなければ、まとめの文字を出す
 	const int32 Fast = FMath::Max(0, Data.FastCount);
 	const int32 Late = FMath::Max(0, Data.LateCount);
+	// (FAST / LATE は、右詰めにしない。いままでどおり)
 	const bool bFastImg = ShowNumber(FastBox, nullptr, FString::Printf(TEXT("%d"), Fast), SmallDigitSize, FString());
 	const bool bLateImg = ShowNumber(LateBox, nullptr, FString::Printf(TEXT("%d"), Late), SmallDigitSize, FString());
 	if (FastLateText)
@@ -449,7 +480,7 @@ void URhythmResultWidget::SetResult(const FRhythmResultData& Data)
 
 // 数字の文字列を、数字の画像で並べる
 bool URhythmResultWidget::ShowNumber(UHorizontalBox* Box, UTextBlock* Text, const FString& Digits,
-	const FVector2D& Size, const FString& FallbackText)
+	const FVector2D& Size, const FString& FallbackText, int32 PadToDigits)
 {
 	// 文字ごとの画像を集める(1つでも足りなければ、画像では出さない)
 	TArray<UTexture2D*> Textures;
@@ -492,6 +523,15 @@ bool URhythmResultWidget::ShowNumber(UHorizontalBox* Box, UTextBlock* Text, cons
 
 	// 並べ直す(前の数字を消してから、新しく作る)
 	Box->ClearChildren();
+
+	// 右詰め: 桁が足りない分だけ、左に見えない空白を入れる
+	if (PadToDigits > Textures.Num())
+	{
+		USpacer* Pad = WidgetTree->ConstructWidget<USpacer>(USpacer::StaticClass());
+		Pad->SetSize(FVector2D(Size.X * static_cast<double>(PadToDigits - Textures.Num()), Size.Y));
+		Box->AddChildToHorizontalBox(Pad);
+	}
+
 	for (int32 i = 0; i < Textures.Num(); ++i)
 	{
 		UImage* DigitImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());

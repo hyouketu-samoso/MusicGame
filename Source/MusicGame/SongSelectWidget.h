@@ -2,7 +2,7 @@
 // ============================================================
 // SongSelectWidget
 //  役割 : ゲーム開始前の曲選択UIの骨組み
-//         (曲の切替 / 難易度 / 速度 / タイミング調整 / ゲームスタート)
+//         (難易度 / 速度 / タイミング調整 / ゲームスタート。曲の切替ボタンは、なくなった)
 //  方針 : 「押された」ことを通知する。
 //         難易度・速度は設定置き場（URhythmSettingsSubsystem）にも保存し、
 //         プレイ画面の譜面選び・ノーツ速度に使われる（難易度調整仕様書）
@@ -86,6 +86,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual FReply NativeOnPreviewKeyDown(const FGeometry& InGeometry,
 		const FKeyEvent& InKeyEvent) override;
@@ -109,8 +110,6 @@ protected:
 	// ---- WBP側に、同じ名前の部品を置く(「変数である」にチェック) ----
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> SongTitleText;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> SongInfoText;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> SongPrevButton;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> SongNextButton;
 
 	// 難易度ボタン
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> VeryEasyButton;
@@ -136,8 +135,6 @@ protected:
 
 private:
 	// ボタンのクリック(AddDynamic には UFUNCTION が必要)
-	UFUNCTION() void HandleSongPrev();
-	UFUNCTION() void HandleSongNext();
 	UFUNCTION() void HandleVeryEasy();
 	UFUNCTION() void HandleEasy();
 	UFUNCTION() void HandleNormal();
@@ -163,6 +160,15 @@ private:
 	// 難易度のボタン(0=Normal / 1=Hard / 2〜4 = 3〜5番目。ESongDifficulty の値と同じ順)
 	UPROPERTY()
 	TArray<TObjectPtr<UButton>> DifficultyButtons;
+
+	// 最初にフォーカスするボタン(選んでいる難易度のボタン。無ければ StartButton)
+	UButton* GetDefaultFocusButton() const;
+
+	ESongDifficulty CurrentDifficulty = ESongDifficulty::Normal;   // いま選んでいる難易度
+
+	// 青い枠線を消すために変えた、エンジン設定(RenderFocusRule)の元の値(戻すために覚えておく)
+	uint8 PrevRenderFocusRule = 0;
+	bool bFocusRuleChanged = false;
 
 	bool bClosing = false;
 	float ElapsedClose = 0.0f;
