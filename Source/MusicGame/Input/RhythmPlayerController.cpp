@@ -246,13 +246,31 @@ bool ARhythmPlayerController::StartSelectedSong()
 		if (const URhythmSettingsSubsystem* Settings =
 			GameInstance->GetSubsystem<URhythmSettingsSubsystem>())
 		{
-			if (Settings->GetDifficulty() == ERhythmDifficulty::Hard)
+			switch (Settings->GetDifficulty())
 			{
-				SelectedChartPath = SongData->HardChartFilePath;
-			}
-			else
-			{
+			case ERhythmDifficulty::VeryEasy:
+				SelectedChartPath = SongData->VeryEasyChartFilePath;
+				break;
+
+			case ERhythmDifficulty::Easy:
+				SelectedChartPath = SongData->EasyChartFilePath;
+				break;
+
+			case ERhythmDifficulty::Normal:
 				SelectedChartPath = SongData->NormalChartFilePath;
+				break;
+
+			case ERhythmDifficulty::Hard:
+				SelectedChartPath = SongData->HardChartFilePath;
+				break;
+
+			case ERhythmDifficulty::VeryHard:
+				SelectedChartPath = SongData->VeryHardChartFilePath;
+				break;
+
+			default:
+				SelectedChartPath = SongData->NormalChartFilePath;
+				break;
 			}
 		}
 	}

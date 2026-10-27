@@ -254,8 +254,8 @@ namespace
 
         switch (Difficulty)
         {
-        case ERhythmDifficulty::Easyst:
-            DifficultyName = TEXT("Easyst");
+        case ERhythmDifficulty::VeryEasy:
+            DifficultyName = TEXT("VeryEasy");
             break;
 
         case ERhythmDifficulty::Easy:
@@ -270,8 +270,8 @@ namespace
             DifficultyName = TEXT("Hard");
             break;
 
-        case ERhythmDifficulty::Hardest:
-            DifficultyName = TEXT("Hardest");
+        case ERhythmDifficulty::VeryHard:
+            DifficultyName = TEXT("VeryHard");
             break;
 
         default:

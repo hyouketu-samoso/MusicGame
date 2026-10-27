@@ -20,11 +20,11 @@ enum class ERhythmJudgement : uint8
 UENUM(BlueprintType)
 enum class ERhythmDifficulty : uint8
 {
-	Easyst,
+	VeryEasy,
 	Easy,
 	Normal,
 	Hard,
-	Hardest,
+	VeryHard,
 };
 
 // どのタイミングの判定か
