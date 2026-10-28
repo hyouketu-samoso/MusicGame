@@ -57,6 +57,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Video", meta = (ClampMin = "0.0", Units = "s"))
 	float RestartSeconds = 1.5f;
 
+	// 動画のループをさせない。
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Video")
+	bool bLoopVideo = false;
+
 	// ポーズ画面に入った・出た時に動画を止める/再開する
 	void PauseVideos();
 	void ResumeVideos();
