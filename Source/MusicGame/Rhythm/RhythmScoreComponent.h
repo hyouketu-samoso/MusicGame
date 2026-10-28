@@ -4,7 +4,7 @@
 // スコア：1判定の内部スコア = 判定倍率 × コンボ倍率
 //         最終スコア = 獲得内部スコア合計 ÷ 理論最大内部スコア × 100（0.00〜100.00点）
 // コンボ：Perfect / Great / Good で +1、Bad / Miss で 0 に戻る
-// 体力  ：開始 100、Bad −8、Miss −15、回復なし。0 以下でゲームオーバー
+// 体力  ：開始 100、Bad −5、Miss −10（仕様書の −8 / −15 から調整）、回復なし。0 以下でゲームオーバー
 
 #pragma once
 
@@ -117,7 +117,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Rhythm Score|Health", meta=(ClampMin=1.0))
 	float MaxHealth = 100.0f;
 
-	// 判定ごとの体力変化（Bad −8 / Miss −15、それ以外 0）
+	// 判定ごとの体力変化（Bad −5 / Miss −10、それ以外 0）
 	UPROPERTY(EditAnywhere, Category="Rhythm Score|Health")
 	FRhythmJudgementValues HealthChanges;
 
