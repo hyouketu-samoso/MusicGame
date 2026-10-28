@@ -129,6 +129,15 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Sequence", meta = (ClampMin = "0.0"))
 	float StepInterval = 0.5f;
 
+	// RANK が出てから、FULL COMBO(ALL PERFECT)が出るまで(ゆっくり出したいときは、大きくする)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Sequence", meta = (ClampMin = "0.0"))
+	float BadgeDelay = 1.0f;
+
+	// FULL COMBO が出てから、NEW RECORD が出るまで
+	// (FULL COMBO が無いときは、RANK が出てから、NEW RECORD が出るまで)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Sequence", meta = (ClampMin = "0.0"))
+	float NewRecordDelay = 1.0f;
+
 	// 判定一覧の1項目ごとの間(PERFECT → GREAT → ... / FAST → LATE)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|Sequence", meta = (ClampMin = "0.0"))
 	float JudgeItemInterval = 0.2f;
@@ -166,6 +175,19 @@ protected:
 	// 土台が出た瞬間(1回)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
 	TObjectPtr<USoundBase> OpenSE;
+
+	// 判定の数(PERFECT / GREAT / GOOD / BAD / MISS)が1項目出るたびに(1項目ごとに1回)
+	// ※ プレイ中の判定SEは使い回さない(別の音を用意する)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
+	TObjectPtr<USoundBase> JudgeItemSE;
+
+	// MAX COMBO が出たとき(1回)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
+	TObjectPtr<USoundBase> MaxComboSE;
+
+	// FAST / LATE が1項目出るたびに(1項目ごとに1回)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
+	TObjectPtr<USoundBase> FastLateSE;
 
 	// SCORE が増えている間(ループする音を設定する。止まるとき自動で止める)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Result|SE")
