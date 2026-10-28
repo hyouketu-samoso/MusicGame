@@ -470,14 +470,42 @@ FRhythmResultData URhythmGameFlowComponent::BuildResultData() const
 		}
 	}
 
-	// 難易度は設定置き場から（並びが同じ Normal / Hard）
+
+	// 難易度は設定置き場から取得し、リザルト用の難易度に変換する
 	if (const UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this))
 	{
-		if (const URhythmSettingsSubsystem* Settings = GameInstance->GetSubsystem<URhythmSettingsSubsystem>())
+		if (const URhythmSettingsSubsystem* Settings =
+			GameInstance->GetSubsystem<URhythmSettingsSubsystem>())
 		{
-			Data.Difficulty = (Settings->GetDifficulty() == ERhythmDifficulty::Hard) ? ESongDifficulty::Hard : ESongDifficulty::Normal;
+			switch (Settings->GetDifficulty())
+			{
+			case ERhythmDifficulty::VeryEasy:
+				Data.Difficulty = ESongDifficulty::VeryEasy;
+				break;
+
+			case ERhythmDifficulty::Easy:
+				Data.Difficulty = ESongDifficulty::Easy;
+				break;
+
+			case ERhythmDifficulty::Normal:
+				Data.Difficulty = ESongDifficulty::Normal;
+				break;
+
+			case ERhythmDifficulty::Hard:
+				Data.Difficulty = ESongDifficulty::Hard;
+				break;
+
+			case ERhythmDifficulty::VeryHard:
+				Data.Difficulty = ESongDifficulty::VeryHard;
+				break;
+
+			default:
+				Data.Difficulty = ESongDifficulty::Normal;
+				break;
+			}
 		}
 	}
+
 
 	// ランクはリザルト画面がスコアから決める（bAutoRankFromScore）。
 	// FULL COMBO / ALL PERFECT・NEW RECORD は決め方が未定のため false のまま
