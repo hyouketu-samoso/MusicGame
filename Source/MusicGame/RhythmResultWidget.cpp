@@ -831,21 +831,21 @@ void URhythmResultWidget::BuildSequence()
 
 	// 3. 判定結果(1項目ずつ、短い間隔で)
 	T += StepInterval;
-	AddReveal(T, PerfectTargets, nullptr);
-	T += JudgeItemInterval; AddReveal(T, GreatTargets, nullptr);
-	T += JudgeItemInterval; AddReveal(T, GoodTargets, nullptr);
-	T += JudgeItemInterval; AddReveal(T, BadTargets, nullptr);
-	T += JudgeItemInterval; AddReveal(T, MissTargets, nullptr);
+	AddReveal(T, PerfectTargets, JudgeItemSE);
+	T += JudgeItemInterval; AddReveal(T, GreatTargets, JudgeItemSE);
+	T += JudgeItemInterval; AddReveal(T, GoodTargets, JudgeItemSE);
+	T += JudgeItemInterval; AddReveal(T, BadTargets, JudgeItemSE);
+	T += JudgeItemInterval; AddReveal(T, MissTargets, JudgeItemSE);
 
 	// 4. MAX COMBO(単独で)
 	T += StepInterval;
-	AddReveal(T, MaxComboTargets, nullptr);
+	AddReveal(T, MaxComboTargets, MaxComboSE);
 
 	// 5. FAST → LATE
 	T += StepInterval;
-	AddReveal(T, FastTargets, nullptr);
+	AddReveal(T, FastTargets, FastLateSE);
 	T += JudgeItemInterval;
-	AddReveal(T, LateTargets, nullptr);
+	AddReveal(T, LateTargets, FastLateSE);
 
 	// 6. SCORE(スロットのように回して、左の桁から止めて、最終スコアで固定する。数え始めと止めるのは、同時にしない)
 	T += StepInterval;
@@ -869,14 +869,14 @@ void URhythmResultWidget::BuildSequence()
 	// 8. FULL COMBO / ALL PERFECT(達成したときだけ。しなければ、飛ばす)
 	if (bBadgeEarned)
 	{
-		T += StepInterval;
+		T += BadgeDelay;
 		AddReveal(T, BadgeTargets, FullComboSE);
 	}
 
 	// 9. NEW RECORD(更新したときだけ。FULL COMBO と同時にしない)
 	if (bNewRecordEarned)
 	{
-		T += StepInterval;
+		T += NewRecordDelay;
 		AddReveal(T, NewRecordTargets, NewRecordSE);
 	}
 
