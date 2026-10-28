@@ -10,6 +10,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "InputCoreTypes.h"
 #include "ChartImporter.h"
 #include "NoteSpawner.generated.h"
 
@@ -87,6 +88,11 @@ public:
     // 譜面を開始する（譜面が読み込まれている必要がある）
     UFUNCTION(BlueprintCallable, Category = "Note Spawner")
     void StartChart();
+
+
+    // 判定ライン（六角形・ガイド線）の表示・非表示を切り替える（JudgeLineToggleKey からも呼ばれる）
+    UFUNCTION(BlueprintCallable, Category = "Note Spawner")
+    void ToggleJudgeLine() { bShowJudgeLine = !bShowJudgeLine; }
 
 
     // 全レーンに1個ずつノーツを飛ばす
@@ -457,6 +463,14 @@ protected:
         Category = "Note Spawner|Debug"
     )
     bool bShowJudgeLine = true;
+
+
+    // プレイ中に判定ライン（六角形・ガイド線）の表示・非表示を切り替えるキー（押すたびに切り替わる）
+    UPROPERTY(
+        EditAnywhere,
+        Category = "Note Spawner|Debug"
+    )
+    FKey JudgeLineToggleKey = EKeys::F2;
 
 
 protected:

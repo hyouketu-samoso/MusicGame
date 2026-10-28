@@ -19,6 +19,7 @@
 #include "Components/SceneComponent.h"
 
 #include "GameFramework/PlayerController.h"
+#include "Components/InputComponent.h"
 
 #include "Kismet/GameplayStatics.h"
 
@@ -292,6 +293,22 @@ void ANoteSpawner::BeginPlay()
 	if (HUDSync && Judge)
 	{
 		HUDSync->BindJudge(Judge);
+	}
+
+
+	// 判定ラインの表示・非表示を切り替えるキー（F2）。このキーだけを受け取り、ほかのキーはそのまま通す
+	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	{
+		EnableInput(PC);
+		if (InputComponent && JudgeLineToggleKey.IsValid())
+		{
+			InputComponent->BindKey(
+				JudgeLineToggleKey,
+				IE_Pressed,
+				this,
+				&ANoteSpawner::ToggleJudgeLine
+			);
+		}
 	}
 
 
