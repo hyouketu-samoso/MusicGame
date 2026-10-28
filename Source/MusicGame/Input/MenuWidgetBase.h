@@ -11,11 +11,33 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "InputCoreTypes.h"
+#include "Styling/SlateTypes.h"
 #include "MenuWidgetBase.generated.h"
+
+// スライダーを動かせる状態(編集中)のとき、横の画像を差し替えるための設定1件分
+USTRUCT(BlueprintType)
+struct FMenuSliderEditImage
+{
+	GENERATED_BODY()
+
+	// 対象のスライダーの名前(WBPのSliderと同じ名前)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Menu")
+	FName SliderName;
+
+	// 差し替える Image の名前(WBPのImageと同じ名前)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Menu")
+	FName ImageName;
+
+	// スライダーを動かせる状態(編集中)の間に表示する画像
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Menu")
+	TObjectPtr<UTexture2D> EditingTexture;
+};
 
 class UButton;
 class USlider;
 class USoundBase;
+class UImage;
+class UTexture2D;
 class FMenuAdjustKeyTracker;
 
 UCLASS()
@@ -33,6 +55,37 @@ protected:
 	// 選択中のButtonの色
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Menu")
 	FLinearColor SelectedColor = FLinearColor(1.0f, 0.8f, 0.2f, 1.0f);
+
+	// フォーカス中のButtonの色を SelectedColor に変えるか(全ボタン共通の基本設定)
+	// ポーズ画面など、色を変えたくないWBPでは OFF にする
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Menu")
+	bool bChangeButtonColorOnFocus = true;
+
+	// 上のフラグが OFF でも、フォーカス時に色を変えたいボタンの名前(WBPのButtonと同じ名前)
+	// 例: ポーズ画面のタブボタン4つだけ色を変えたいとき
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Menu")
+	TArray<FName> FocusColorButtonNames;
+
+	// 「最後にフォーカスが当たったボタン」を選択中として残すボタンの名前(タブボタンなど)。
+	// このリストの中で別のボタンにフォーカスが移るまで、フォーカスが外れても選択中の見た目
+	// (Hoveredの画像・選択色)を保つ。パネルを開いてフォーカスがタブの外へ移っても、そのタブは緑のまま
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Menu")
+	TArray<FName> StickyHighlightButtonNames;
+
+	// これらのボタンにフォーカスが移ったら、残していた「選択中」を解除する(タブを元の色に戻す)。
+	// ゲーム再開・ゲーム終了など、パネルの外にあるボタンの名前を入れる
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Menu")
+	TArray<FName> StickyReleaseButtonNames;
+
+	// パッド/キーボードでフォーカスが合ったButtonも、マウスを乗せたとき(Hovered)と同じ画像にするか。
+	// ButtonのStyleの Hovered に入れた画像が、フォーカス中の Normal として表示される
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Menu")
+	bool bUseHoveredStyleOnFocus = true;
+
+	// スライダーを動かせる状態(編集中)のとき、横の画像を別の画像に差し替える設定(スライダーごとに1件)
+	// ※ SliderのRequires Controller Lockを有効にしておく。右ボタンで編集開始、もう一度押すと終了
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Menu")
+	TArray<FMenuSliderEditImage> SliderEditImages;
 
 	// 選択されていないButtonの色
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Menu")
@@ -126,6 +179,25 @@ private:
 	TSharedPtr<FMenuAdjustKeyTracker> AdjustKeyTracker;
 	TSet<TWeakObjectPtr<UButton>> ToggledOnButtons;
 
+	// フォーカス時のStyle差し替え用。元のStyleを覚えておいて、フォーカスが外れたら戻す
+	TMap<TWeakObjectPtr<UButton>, FButtonStyle> OriginalButtonStyles;
+	TSet<TWeakObjectPtr<UButton>> StyleSwappedButtons;
+
+	// StickyHighlightButtonNames の中で、いま「選択中」として残しているボタン
+	TWeakObjectPtr<UButton> StickyHighlightedButton;
+
+	// スライダー横の画像の差し替え用(実行中の管理データ)
+	struct FSliderImageRuntime
+	{
+		TWeakObjectPtr<USlider> Slider;
+		TWeakObjectPtr<UImage> Image;
+		FSlateBrush OriginalBrush;   // 差し替える前の画像
+		int32 ConfigIndex = INDEX_NONE;   // SliderEditImages の何番目か
+		bool bEditing = false;       // スライダーが編集中(動かせる状態)か
+		bool bApplied = false;       // 今、差し替え後の画像を表示しているか
+	};
+	TArray<FSliderImageRuntime> SliderImageRuntimes;
+
 	// どのボタンが押されても呼ばれる(決定SE用)
 	UFUNCTION()
 	void HandleAnyButtonClicked();
@@ -133,4 +205,11 @@ private:
 	// ChangeSEButtonNames のボタン用(変更SE)
 	UFUNCTION()
 	void HandleChangeButtonClicked();
+
+	// スライダーの編集開始/終了(Requires Controller Lock)で呼ばれる
+	UFUNCTION()
+	void HandleSliderControllerCaptureBegin();
+
+	UFUNCTION()
+	void HandleSliderControllerCaptureEnd();
 };

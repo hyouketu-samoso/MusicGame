@@ -2,6 +2,7 @@
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
+#include "Engine/Texture2D.h"
 #include "Components/AudioComponent.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/PlayerController.h"
@@ -160,6 +161,10 @@ void UTimingAdjustWidget::UpdateNoteVisual(double Now)
 
 	NoteImage->SetVisibility(ESlateVisibility::HitTestInvisible);
 	NoteImage->SetRenderTranslation(FVector2D(0.0f, FMath::Lerp(NoteStartY, NoteEndY, P)));
+
+	// 奥では小さく、判定ラインに近づくほど大きく（位置と同じ進み具合 P を使う。通り過ぎたあとは大きさを保つ）
+	const float Scale = FMath::Lerp(NoteStartScale, NoteEndScale, FMath::Clamp(P, 0.0f, 1.0f));
+	NoteImage->SetRenderScale(FVector2D(Scale * NoteWidthMultiplier, Scale));
 }
 
 float UTimingAdjustWidget::ApplyDepthEase(float Progress) const
@@ -401,12 +406,55 @@ void UTimingAdjustWidget::RefreshValueText()
 		OffsetMs = Settings->GetInputOffsetMs();
 	}
 
-	// 0 のときは「0ms」、それ以外は「+23ms」「-15ms」
-	const FString Text = (OffsetMs == 0)
-		? FString(TEXT("0ms"))
-		: FString::Printf(TEXT("%+dms"), OffsetMs);
+	// 数字の画像：絶対値を百・十・一の位に分けて出す。上位の桁が0なら隠す（一の位は0でも出す）
+	const int32 Abs = FMath::Clamp(FMath::Abs(OffsetMs), 0, 999);
+	const int32 Hundreds = Abs / 100;
+	const int32 Tens = (Abs / 10) % 10;
+	const int32 Ones = Abs % 10;
+	SetDigitImage(DigitHundreds, Hundreds, Hundreds > 0);
+	SetDigitImage(DigitTens, Tens, Abs >= 10);
+	SetDigitImage(DigitOnes, Ones, true);
 
-	AdjustValueText->SetText(FText::FromString(Text));
+	// 符号の画像：プラスのときは「＋」、マイナスのときは「－」、0 のときはどちらも隠す
+	if (SignPlusImage)
+	{
+		SignPlusImage->SetVisibility(OffsetMs > 0 ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+	}
+	if (SignMinusImage)
+	{
+		SignMinusImage->SetVisibility(OffsetMs < 0 ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+	}
+
+	// テキストも置いてあれば、そちらも更新する。0 のときは「0ms」、それ以外は「+23ms」「-15ms」
+	if (AdjustValueText)
+	{
+		const FString Text = (OffsetMs == 0)
+			? FString(TEXT("0ms"))
+			: FString::Printf(TEXT("%+dms"), OffsetMs);
+		AdjustValueText->SetText(FText::FromString(Text));
+	}
+}
+
+void UTimingAdjustWidget::SetDigitImage(UImage* Image, int32 Digit, bool bShow)
+{
+	if (!Image)
+	{
+		return;
+	}
+
+	// 隠す桁は、レイアウトからも外す（横に並べた場合に詰まる）
+	if (!bShow)
+	{
+		Image->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+
+	// 画像のサイズは WBP で決めたままにして、絵だけ差し替える
+	if (DigitTextures.IsValidIndex(Digit) && DigitTextures[Digit])
+	{
+		Image->SetBrushFromTexture(DigitTextures[Digit], /*bMatchSize=*/false);
+	}
+	Image->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 }
 
 // ============================================================

@@ -91,7 +91,7 @@ void ABackVideoActor::SetupSlot(UStaticMeshComponent* Mesh, const FBackVideoSlot
 
 			const int32 Idx = (&InSlot == &Slot2) ? 1 : 0;
 
-			InSlot.Player->SetLooping(true);
+			InSlot.Player->SetLooping(bLoopVideo);
 
 			// 再生中のまま Seek すると取りこぼされることがあるので、いったん止めてから移動する
 			InSlot.Player->Pause();
@@ -113,7 +113,7 @@ void ABackVideoActor::SetupSlot(UStaticMeshComponent* Mesh, const FBackVideoSlot
 		}
 		else if (InSlot.Player->OpenSource(InSlot.Source))
 		{
-			InSlot.Player->SetLooping(true);
+			InSlot.Player->SetLooping(bLoopVideo);
 		}
 		else
 		{
@@ -188,7 +188,7 @@ void ABackVideoActor::ParkAtTitle(const FBackVideoSlot& InSlot)
 
 	const int32 Idx = (&InSlot == &Slot2) ? 1 : 0;
 
-	P->SetLooping(true);
+	P->SetLooping(bLoopVideo);
 	P->Pause();
 
 	// すでにその位置なら、移動しない(同じ位置への移動は完了の通知が来ないことがあるため)
@@ -227,7 +227,7 @@ void ABackVideoActor::ReleaseFromTitle()
 
 		if (!P->IsReady()) { continue; }
 
-		P->SetLooping(true);
+		P->SetLooping(bLoopVideo);
 
 		// 通知が来ていなくても、すでに開始位置の近くまで移動できていれば、移動は終わっているとみなす
 		if (bTitleSeekPending[i] &&

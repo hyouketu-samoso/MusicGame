@@ -16,6 +16,7 @@
 class UButton;
 class UTextBlock;
 class UImage;
+class UTexture2D;
 class USoundBase;
 class USoundClass;
 
@@ -82,12 +83,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TimingAdjust", meta = (ClampMin = "0.0", Units = "s"))
 	float PassVisibleSec = 0.2f;
 
-	// NoteImage の Render Translation の Y（出現位置 → 判定ライン、ピクセル）
+	// NoteImage の Render Translation の Y（出現位置 → 判定ライン、ピクセル）。
+	// NoteImage を WBP に置いた位置が Y=0（出現位置）で、そこから判定ラインまで -465（上方向）動く
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TimingAdjust|Note")
 	float NoteStartY = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TimingAdjust|Note")
-	float NoteEndY = 300.0f;
+	float NoteEndY = 616.0f;
 
 	// 遠近感の強さ。1 = 画面上を等速で落とす（初期値）。
 	// 大きくするほど「奥ではゆっくり、手前に来るほど速い」動きになり、ゲーム内の3Dの見え方に近づく。
@@ -100,6 +102,19 @@ protected:
 	// その見えない時間を飛ばして、見え始めから判定ラインまでを NoteStartY → NoteEndY に割り当てる
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TimingAdjust|Note", meta = (ClampMin = "0.0", ClampMax = "0.9"))
 	float NoteAppearProgress = 0.0f;
+
+	// ノーツの大きさの変化（NoteImage の Render Scale）。出現位置 → 判定ラインで、StartScale → EndScale になる。
+	// WBP の NoteImage の Size は、「判定ラインに着いたときの大きさ」（EndScale = 1 のとき）に合わせておく。
+	// 1 / 1 にすると、大きさは変わらない
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TimingAdjust|Note", meta = (ClampMin = "0.1", ClampMax = "3.0"))
+	float NoteStartScale = 0.7f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TimingAdjust|Note", meta = (ClampMin = "0.1", ClampMax = "3.0"))
+	float NoteEndScale = 1.0f;
+
+	// ノーツの横幅だけにかける倍率（1 = 縦と同じ倍率）。ノーツを横長にしたいときに大きくする
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TimingAdjust|Note", meta = (ClampMin = "0.1", ClampMax = "3.0"))
+	float NoteWidthMultiplier = 1.0f;
 
 	// ============================================================
 	// 調整値の計算
@@ -189,16 +204,34 @@ protected:
 	float PerfectWindowSec = 0.040f;
 
 	// ============================================================
-	// WBP 側に同じ名前の部品を置く（「変数である」にチェック）
+	// 調整値の表示（数字の画像）
 	// ============================================================
 
-	// 必須：現在の調整値（数字だけ。例「0ms」「+23ms」）。「現在の調整値：」は WBP に固定テキストで置く
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> AdjustValueText;
+	// 数字の画像（要素0〜9 = T_Timing_UI_0〜9）。WBP のクラスデフォルトで10個指定する
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TimingAdjust|Digits")
+	TArray<TObjectPtr<UTexture2D>> DigitTextures;
+
+	// ============================================================
+	// WBP 側に同じ名前の部品を置く（「変数である」にチェック）
+	// ============================================================
 
 	// 必須：戻るボタン
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> BackButton;
 
 	// 以下は無くても動く
+
+	// 現在の調整値を数字の画像で出す（百の位・十の位・一の位）。上位の桁が0のときは隠す
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> DigitHundreds;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> DigitTens;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> DigitOnes;
+
+	// 符号の画像（調整値がプラスのとき / マイナスのときだけ表示。0 のときはどちらも隠す）
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> SignPlusImage;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> SignMinusImage;
+
+	// 数字の画像の代わりにテキストで出したいとき用（置かなくてもよい。例「0ms」「+23ms」）
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> AdjustValueText;
+
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> NoteImage;          // 落ちてくるノーツ
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> LastErrorText;  // 直前のズレ（例「+12ms」「範囲外」）
 
@@ -217,8 +250,11 @@ private:
 	// 到達時間の進み具合(0〜1)を、画面上の位置の進み具合に変える（遠近感）
 	float ApplyDepthEase(float Progress) const;
 
-	// 現在の調整値の表示を更新する
+	// 現在の調整値の表示を更新する（数字の画像・符号・テキスト）
 	void RefreshValueText();
+
+	// 数字の画像を1桁ぶん更新する（bShow が false なら隠す）
+	void SetDigitImage(UImage* Image, int32 Digit, bool bShow);
 
 	// SE を鳴らす（範囲内ならパーフェクトのSE、範囲外なら空打ちのSE）
 	void PlayInputSE(bool bInRange);

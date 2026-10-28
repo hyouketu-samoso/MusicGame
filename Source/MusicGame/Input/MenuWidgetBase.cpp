@@ -1,6 +1,8 @@
 ﻿#include "MenuWidgetBase.h"
 #include "Components/Button.h"
 #include "Components/Slider.h"
+#include "Components/Image.h"
+#include "Engine/Texture2D.h"
 #include "Blueprint/WidgetTree.h"
 #include "InputCoreTypes.h"
 #include "Framework/Application/SlateApplication.h"
@@ -59,6 +61,10 @@ void UMenuWidgetBase::NativeConstruct()
 	MenuButtons.Reset();
 	MenuSliders.Reset();
 	SliderLastValues.Reset();
+	OriginalButtonStyles.Reset();
+	StyleSwappedButtons.Reset();
+	SliderImageRuntimes.Reset();
+	StickyHighlightedButton.Reset();
 
 	// 十字キー/矢印キーの押下状態の見張りを登録する
 	if (FSlateApplication::IsInitialized())
@@ -80,6 +86,7 @@ void UMenuWidgetBase::NativeConstruct()
 				if (UButton* Button = Cast<UButton>(Widget))
 				{
 					MenuButtons.Add(Button);
+					OriginalButtonStyles.Add(Button, Button->GetStyle());   // 元のStyleを覚えておく
 					// 決定SE用(右ボタン・Enter・クリックのどれでも鳴る)
 					// ただし NoDecideSEButtonNames に入っているボタンは鳴らさない
 					// ChangeSEButtonNames に入っているボタンは、決定SEの代わりに変更SEを鳴らす
@@ -98,6 +105,26 @@ void UMenuWidgetBase::NativeConstruct()
 					SliderLastValues.Add(Slider, FMath::RoundToInt(Slider->GetValue()));
 				}
 			});
+	}
+
+	// スライダー横の画像の差し替え対象を登録する(名前でWBPから探す)
+	for (int32 i = 0; i < SliderEditImages.Num(); ++i)
+	{
+		const FMenuSliderEditImage& Entry = SliderEditImages[i];
+		USlider* Slider = Cast<USlider>(GetWidgetFromName(Entry.SliderName));
+		UImage* Image = Cast<UImage>(GetWidgetFromName(Entry.ImageName));
+		if (Slider && Image && Entry.EditingTexture)
+		{
+			FSliderImageRuntime& Runtime = SliderImageRuntimes.AddDefaulted_GetRef();
+			Runtime.Slider = Slider;
+			Runtime.Image = Image;
+			Runtime.OriginalBrush = Image->GetBrush();   // 元の画像を覚えておく
+			Runtime.ConfigIndex = i;
+
+			// スライダーの編集開始/終了を受け取る
+			Slider->OnControllerCaptureBegin.AddUniqueDynamic(this, &UMenuWidgetBase::HandleSliderControllerCaptureBegin);
+			Slider->OnControllerCaptureEnd.AddUniqueDynamic(this, &UMenuWidgetBase::HandleSliderControllerCaptureEnd);
+		}
 	}
 
 	// 最初に選択するButtonを決める(名前指定があればそれ、無ければ先頭)
@@ -137,6 +164,32 @@ void UMenuWidgetBase::NativeDestruct()
 	}
 	AdjustKeyTracker.Reset();
 
+	// フォーカス中に差し替えたStyleを元に戻す(開き直したとき、差し替え後を元と誤認しないため)
+	for (const TPair<TWeakObjectPtr<UButton>, FButtonStyle>& Pair : OriginalButtonStyles)
+	{
+		if (UButton* Button = Pair.Key.Get())
+		{
+			if (StyleSwappedButtons.Contains(Pair.Key))
+			{
+				Button->SetStyle(Pair.Value);
+			}
+		}
+	}
+	StyleSwappedButtons.Reset();
+
+	// スライダー横の画像も元に戻す
+	for (FSliderImageRuntime& Runtime : SliderImageRuntimes)
+	{
+		if (Runtime.bApplied)
+		{
+			if (UImage* Image = Runtime.Image.Get())
+			{
+				Image->SetBrush(Runtime.OriginalBrush);
+			}
+		}
+	}
+	SliderImageRuntimes.Reset();
+
 	Super::NativeDestruct();
 }
 
@@ -144,15 +197,37 @@ void UMenuWidgetBase::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 
+	// StickyHighlightButtonNames のボタンにフォーカスが来たら、それを「選択中」として覚える
+	// (別のボタンに移るまで残る。フォーカスがタブの外へ出ても変わらない)
+	// StickyReleaseButtonNames のボタン(ゲーム再開など)にフォーカスが移ったら、覚えていた選択中を解除する
+	for (UButton* Button : MenuButtons)
+	{
+		if (!Button || !Button->HasKeyboardFocus()) continue;
+
+		if (StickyHighlightButtonNames.Contains(Button->GetFName()))
+		{
+			StickyHighlightedButton = Button;
+		}
+		else if (StickyReleaseButtonNames.Contains(Button->GetFName()))
+		{
+			StickyHighlightedButton.Reset();
+		}
+	}
+
 	// 選択中のButtonだけ色を変える(ポーズ中もUMGのTickは動く)
 	for (UButton* Button : MenuButtons)
 	{
 		if (!Button) continue;
 
 		const bool bFocused = Button->HasKeyboardFocus();
+		// 見た目上の「選択中」: フォーカス中、または StickyHighlightButtonNames で残している選択中ボタン
+		const bool bHighlighted = bFocused || (StickyHighlightedButton.Get() == Button);
 
 		FLinearColor Color = NormalColor;
-		if (bFocused)
+		// フラグがON、または FocusColorButtonNames に入っているボタンは、選択色にする
+		const bool bUseFocusColor = bChangeButtonColorOnFocus
+			|| FocusColorButtonNames.Contains(Button->GetFName());   // ← 変更
+		if (bHighlighted && bUseFocusColor)
 		{
 			Color = SelectedColor;
 		}
@@ -161,6 +236,32 @@ void UMenuWidgetBase::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 			Color = ToggledOnColor;
 		}
 		Button->SetBackgroundColor(Color);
+
+		// パッドでフォーカスが合ったときも、マウスを乗せたとき(Hovered)と同じ画像にする。
+		// 状態が変わった瞬間だけStyleを入れ替える(毎フレームはやらない)
+		if (bUseHoveredStyleOnFocus)
+		{
+			const TWeakObjectPtr<UButton> WeakButton(Button);
+			const bool bSwapped = StyleSwappedButtons.Contains(WeakButton);
+			if (bHighlighted != bSwapped)
+			{
+				if (const FButtonStyle* Original = OriginalButtonStyles.Find(WeakButton))
+				{
+					if (bHighlighted)
+					{
+						FButtonStyle NewStyle = *Original;
+						NewStyle.SetNormal(Original->Hovered);
+						Button->SetStyle(NewStyle);
+						StyleSwappedButtons.Add(WeakButton);
+					}
+					else
+					{
+						Button->SetStyle(*Original);
+						StyleSwappedButtons.Remove(WeakButton);
+					}
+				}
+			}
+		}
 
 
 		// フォーカスが新しく移ったら、ブループリントへ通知する
@@ -171,6 +272,7 @@ void UMenuWidgetBase::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 			bHasHadFocus = true;
 			LastFocusedButton = Button;
 			LastFocusedSlider.Reset();
+
 			if (bHadPrevious)
 			{
 				PlayMenuSE(MoveSE);
@@ -193,6 +295,36 @@ void UMenuWidgetBase::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 			if (bHadPrevious)
 			{
 				PlayMenuSE(MoveSE);
+			}
+		}
+	}
+
+	// スライダーを動かせる状態(編集中)の間だけ、横の画像を差し替える
+	for (FSliderImageRuntime& Runtime : SliderImageRuntimes)
+	{
+		USlider* Slider = Runtime.Slider.Get();
+		UImage* Image = Runtime.Image.Get();
+		if (!Slider || !Image) continue;
+
+		// 保険: フォーカスが外れていたら編集中ではないとみなす
+		if (Runtime.bEditing && !Slider->HasKeyboardFocus())
+		{
+			Runtime.bEditing = false;
+		}
+
+		if (Runtime.bEditing != Runtime.bApplied)
+		{
+			Runtime.bApplied = Runtime.bEditing;
+			if (Runtime.bEditing)
+			{
+				if (SliderEditImages.IsValidIndex(Runtime.ConfigIndex))
+				{
+					Image->SetBrushFromTexture(SliderEditImages[Runtime.ConfigIndex].EditingTexture, false);
+				}
+			}
+			else
+			{
+				Image->SetBrush(Runtime.OriginalBrush);
 			}
 		}
 	}
@@ -319,6 +451,28 @@ void UMenuWidgetBase::HandleAnyButtonClicked()
 void UMenuWidgetBase::HandleChangeButtonClicked()
 {
 	PlayMenuSE(ChangeSE);
+}
+
+// 編集開始: いまフォーカスのあるスライダーを「編集中」にする
+void UMenuWidgetBase::HandleSliderControllerCaptureBegin()
+{
+	for (FSliderImageRuntime& Runtime : SliderImageRuntimes)
+	{
+		const USlider* Slider = Runtime.Slider.Get();
+		if (Slider && Slider->HasKeyboardFocus())
+		{
+			Runtime.bEditing = true;
+		}
+	}
+}
+
+// 編集終了: すべて「編集中ではない」に戻す(画像の復元はTickで行う)
+void UMenuWidgetBase::HandleSliderControllerCaptureEnd()
+{
+	for (FSliderImageRuntime& Runtime : SliderImageRuntimes)
+	{
+		Runtime.bEditing = false;
+	}
 }
 
 void UMenuWidgetBase::PlayMenuSE(USoundBase* SE)
