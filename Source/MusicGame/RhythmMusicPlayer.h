@@ -60,7 +60,7 @@ public:
 
     // 音楽の再生開始を遅らせる時間（秒）
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm|Timing")
-    float MusicStartDelay = 0.2f;
+    float MusicStartDelay = 1.0f;
 
     FTimerHandle MusicStartTimerHandle;
 protected:

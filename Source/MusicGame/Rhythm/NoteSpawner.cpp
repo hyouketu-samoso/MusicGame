@@ -142,8 +142,8 @@ ANoteSpawner::ANoteSpawner()
 	{
 		FLinearColor(FColor(255, 105, 180)),  // レーン1 左外側：ピンク
 		FLinearColor(FColor(200,   0,   0)),  // レーン2 左内側：赤（濃いめ）
-		FLinearColor(FColor(  0,  30, 210)),  // レーン3 右内側：青（濃いめ）
-		FLinearColor(FColor(  0, 230, 255))   // レーン4 右外側：シアン
+		FLinearColor(FColor(0,  30, 210)),  // レーン3 右内側：青（濃いめ）
+		FLinearColor(FColor(0, 230, 255))   // レーン4 右外側：シアン
 	};
 
 
@@ -152,8 +152,8 @@ ANoteSpawner::ANoteSpawner()
 	{
 		FLinearColor(FColor(255, 105, 180)),  // レーン1 左外側：ピンク
 		FLinearColor(FColor(255,   0,   0)),  // レーン2 左内側：赤
-		FLinearColor(FColor(  0,  70, 255)),  // レーン3 右内側：青
-		FLinearColor(FColor(  0, 230, 255))   // レーン4 右外側：シアン
+		FLinearColor(FColor(0,  70, 255)),  // レーン3 右内側：青
+		FLinearColor(FColor(0, 230, 255))   // レーン4 右外側：シアン
 	};
 
 
@@ -169,10 +169,10 @@ ANoteSpawner::ANoteSpawner()
 
 	LaneTargetOffsets =
 	{
-		FVector( -60.0f, -370.0f, 0.0f),
+		FVector(-60.0f, -370.0f, 0.0f),
 		FVector(-205.0f, -130.0f, 0.0f),
 		FVector(-205.0f,  130.0f, 0.0f),
-		FVector( -60.0f,  370.0f, 0.0f)
+		FVector(-60.0f,  370.0f, 0.0f)
 	};
 
 
@@ -827,13 +827,22 @@ void ANoteSpawner::StartChart()
 	// となり、ノーツが判定ラインへ到着する。
 	// ========================================================
 
+	const float TravelTime = GetEffectiveTravelTime();
+
+	// 速度1（移動時間2.4秒）を基準にする
+	const float ReferenceTravelTime = 2.4f;
+	const float ReferenceDelay = 0.3f;
+
+	// 速度が速くなるほど、ノーツの出現を遅らせる
+	const float AdjustedDelay = FMath::Max(
+		0.0f,
+		ReferenceDelay + ReferenceTravelTime - TravelTime
+	);
+
 	ChartStartWorldTime =
-		Now +
-		static_cast<double>(
-			GetEffectiveTravelTime()
-			);
-
-
+		Now
+		+ static_cast<double>(AdjustedDelay)
+		+ static_cast<double>(TravelTime);
 	NextChartNoteIndex = 0;
 
 	bChartRunning = true;
@@ -1454,7 +1463,7 @@ float ANoteSpawner::GetSongTime() const
 
 	return static_cast<float>(
 		GetWorld()->GetTimeSeconds() - ChartStartWorldTime
-	);
+		);
 }
 
 

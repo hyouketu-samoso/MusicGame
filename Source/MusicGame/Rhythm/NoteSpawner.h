@@ -179,6 +179,10 @@ public:
     UFUNCTION(BlueprintPure, Category = "Note Spawner|Chart")
     int32 GetChartJudgeCount() const;
 
+    // ゲーム開始からノーツ出現を開始するまでの待機時間
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm|Timing")
+    float InitialNoteDelay = 0.3f;
+
     // 指定されたJSON譜面を読み込む
     bool LoadChartFromPath(const FString& RelativeChartPath);
 
