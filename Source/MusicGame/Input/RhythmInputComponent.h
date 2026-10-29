@@ -280,7 +280,7 @@ private:
 	float ReverseLockSec = 0.06f;	// 発火後、逆方向を無効にする秒数
 
 	// デバッグ表示
-	bool bShowDebug = true;
+	bool bShowDebug = false;	// 左上にだしていたどっちに倒しているかのデバック用表示
 	int32 LastLane = -1;
 	double LastLaneTime = 0.0f;
 	int32 FireCount = 0;
