@@ -10,7 +10,6 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "InputCoreTypes.h"
 #include "ChartImporter.h"
 #include "NoteSpawner.generated.h"
 
@@ -74,13 +73,6 @@ public:
     ) override;
 
 
-    // 判定ラインをエディタのビューポートでも表示するため、プレイ中以外もTickさせる
-    virtual bool ShouldTickIfViewportsOnly() const override
-    {
-        return bShowJudgeLine;
-    }
-
-
     // ========================================================
     // Blueprint から呼べる操作
     // ========================================================
@@ -88,11 +80,6 @@ public:
     // 譜面を開始する（譜面が読み込まれている必要がある）
     UFUNCTION(BlueprintCallable, Category = "Note Spawner")
     void StartChart();
-
-
-    // 判定ライン（六角形・ガイド線）の表示・非表示を切り替える（JudgeLineToggleKey からも呼ばれる）
-    UFUNCTION(BlueprintCallable, Category = "Note Spawner")
-    void ToggleJudgeLine() { bShowJudgeLine = !bShowJudgeLine; }
 
 
     // 全レーンに1個ずつノーツを飛ばす
@@ -134,7 +121,7 @@ public:
     ) const;
 
 
-    // 指定レーンのノーツ・判定枠の大きさ（倍率）
+    // 指定レーンのノーツの大きさ（倍率）
     UFUNCTION(BlueprintPure, Category = "Note Spawner")
     float GetLaneNoteScale(
         int32 LaneIndex
@@ -281,16 +268,7 @@ protected:
     TArray<FLinearColor> LaneColors;
 
 
-    // 判定枠（判定ラインの六角形）の色（要素番号 = レーン番号）。
-    // ノーツより鮮やかにしたいので別に持つ。要素が足りないレーンは LaneColors を使う
-    UPROPERTY(
-        EditAnywhere,
-        Category = "Note Spawner|Lane"
-    )
-    TArray<FLinearColor> JudgeLineColors;
-
-
-    // 判定地点でのノーツ・判定枠の向き（要素番号 = レーン番号、ヨー回転・度）。
+    // 判定地点でのノーツの向き（要素番号 = レーン番号、ヨー回転・度）。
     // ノーツは出現時は横向きで、判定地点に近づくにつれてこの角度まで回る。
     // 初期値は外側2レーンを V字のガイド線（外側 → 内側の判定地点を結ぶ線）に沿わせた角度
     UPROPERTY(
@@ -300,7 +278,7 @@ protected:
     TArray<float> LaneTargetYaws;
 
 
-    // ノーツ・判定枠の大きさ（要素番号 = レーン番号、倍率）。
+    // ノーツの大きさ（要素番号 = レーン番号、倍率）。
     // 外側2レーンは奥にあり斜めなので小さく見える。画面上で内側2レーンと同じ大きさに見えるよう大きくする
     UPROPERTY(
         EditAnywhere,
@@ -310,7 +288,7 @@ protected:
 
 
     // ノーツの画像（要素番号 = レーン番号）。設定したレーンは、六角形の板の代わりに画像を貼った板で表示する。
-    // 判定枠も画像と同じ斜めの六角形で描く。空のレーンは今までどおり六角形の板
+    // 空のレーンは今までどおり六角形の板
     UPROPERTY(
         EditAnywhere,
         Category = "Note Spawner|Lane"
@@ -457,26 +435,6 @@ protected:
     float HoldDurationMax = 3.0f;
 
 
-    // ========================================================
-    // Debug
-    // ========================================================
-
-    // 判定ラインを表示する
-    UPROPERTY(
-        EditAnywhere,
-        Category = "Note Spawner|Debug"
-    )
-    bool bShowJudgeLine = true;
-
-
-    // プレイ中に判定ライン（六角形・ガイド線）の表示・非表示を切り替えるキー（押すたびに切り替わる）
-    UPROPERTY(
-        EditAnywhere,
-        Category = "Note Spawner|Debug"
-    )
-    FKey JudgeLineToggleKey = EKeys::F2;
-
-
 protected:
 
     // ========================================================
@@ -562,14 +520,6 @@ protected:
     bool IsLaneFree(
         int32 LaneIndex
     ) const;
-
-
-    // ========================================================
-    // Debug
-    // ========================================================
-
-    // 判定ラインを描画
-    void DrawJudgeLine() const;
 
 
     // ========================================================

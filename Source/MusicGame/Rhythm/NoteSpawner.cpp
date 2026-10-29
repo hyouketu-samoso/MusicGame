@@ -19,11 +19,9 @@
 #include "Components/SceneComponent.h"
 
 #include "GameFramework/PlayerController.h"
-#include "Components/InputComponent.h"
 
 #include "Kismet/GameplayStatics.h"
 
-#include "DrawDebugHelpers.h"
 
 #include "Engine/World.h"
 #include "TimerManager.h"
@@ -147,16 +145,6 @@ ANoteSpawner::ANoteSpawner()
 	};
 
 
-	// 判定枠の色。ノーツの内側2色は濃くしてあるので、判定枠はくすまないよう鮮やかな赤・青にする
-	JudgeLineColors =
-	{
-		FLinearColor(FColor(255, 105, 180)),  // レーン1 左外側：ピンク
-		FLinearColor(FColor(255,   0,   0)),  // レーン2 左内側：赤
-		FLinearColor(FColor(0,  70, 255)),  // レーン3 右内側：青
-		FLinearColor(FColor(0, 230, 255))   // レーン4 右外側：シアン
-	};
-
-
 	// ========================================================
 	// 4 Lane Targets（V字）
 	//
@@ -193,7 +181,7 @@ ANoteSpawner::ANoteSpawner()
 
 
 	// ========================================================
-	// 4 Lane Note Scales（ノーツ・判定枠の大きさ）
+	// 4 Lane Note Scales（ノーツの大きさ）
 	//
 	// 外側2レーンは内側より約 1.5m 奥にあり、斜めなので横幅も短く見える。
 	// カメラ初期値のとき画面上で内側2レーンと同じ大きさに見える倍率（計算上 約 1.5）
@@ -296,22 +284,6 @@ void ANoteSpawner::BeginPlay()
 	}
 
 
-	// 判定ラインの表示・非表示を切り替えるキー（F2）。このキーだけを受け取り、ほかのキーはそのまま通す
-	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
-	{
-		EnableInput(PC);
-		if (InputComponent && JudgeLineToggleKey.IsValid())
-		{
-			InputComponent->BindKey(
-				JudgeLineToggleKey,
-				IE_Pressed,
-				this,
-				&ANoteSpawner::ToggleJudgeLine
-			);
-		}
-	}
-
-
 	// ========================================================
 	// Chart Mode
 	// ========================================================
@@ -393,16 +365,6 @@ void ANoteSpawner::Tick(
 )
 {
 	Super::Tick(DeltaTime);
-
-
-	// ========================================================
-	// Judge Line Debug
-	// ========================================================
-
-	if (bShowJudgeLine)
-	{
-		DrawJudgeLine();
-	}
 
 
 	// ========================================================
@@ -1572,52 +1534,6 @@ FVector ANoteSpawner::GetLaneTarget(
 
 	return GetActorLocation() +
 		GetActorRightVector() * Offset;
-}
-
-
-// ============================================================
-// Draw Judge Line
-// ============================================================
-
-void ANoteSpawner::DrawJudgeLine() const
-{
-	const int32 LaneNum = LaneColors.Num();
-	if (LaneNum == 0)
-	{
-		return;
-	}
-
-	const UWorld* World = GetWorld();
-
-	// となりのレーンの判定位置どうしを線でつなぐ（横一列でも V 字でも同じ）
-	for (int32 Lane = 0; Lane + 1 < LaneNum; ++Lane)
-	{
-		DrawDebugLine(World, GetLaneTarget(Lane), GetLaneTarget(Lane + 1), FColor::White, false, -1.0f, 0, 2.0f);
-	}
-
-	// 飛ばすノーツの形（クラスの初期値）から輪郭を取り、各レーンの判定位置に描く。
-	// ノーツがこの枠にぴったり重なった瞬間がパーフェクト
-	const ANoteActor* NoteDefaults = NoteClass ? NoteClass->GetDefaultObject<ANoteActor>() : GetDefault<ANoteActor>();
-	TArray<FVector> Outline;
-
-	for (int32 Lane = 0; Lane < LaneNum; ++Lane)
-	{
-		// 画像のノーツなら画像の斜めの六角形（右レーンは左右反転）、そうでなければ六角形の板の形
-		NoteDefaults->GetTexturePlateOutline(GetLaneNoteTexture(Lane), IsRightLane(Lane), Outline);
-
-		// 判定枠もノーツが届いたときと同じ向きにする
-		const FQuat Rotation = GetActorQuat() * FRotator(0.0f, GetLaneTargetYaw(Lane), 0.0f).Quaternion();
-		const FVector Center = GetLaneTarget(Lane);
-		const FLinearColor& LineColor = JudgeLineColors.IsValidIndex(Lane) ? JudgeLineColors[Lane] : LaneColors[Lane];
-		const FColor Color = LineColor.ToFColor(true);
-		for (int32 i = 0; i < Outline.Num(); ++i)
-		{
-			const float Scale = GetLaneNoteScale(Lane);
-			const FVector P0 = Center + Rotation.RotateVector(Outline[i] * Scale);
-			const FVector P1 = Center + Rotation.RotateVector(Outline[(i + 1) % Outline.Num()] * Scale);
-			DrawDebugLine(World, P0, P1, Color, false, -1.0f, 0, 3.0f);
-		}
-	}
 }
 
 
