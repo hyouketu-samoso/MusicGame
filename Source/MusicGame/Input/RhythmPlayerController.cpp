@@ -371,6 +371,15 @@ void ARhythmPlayerController::HandleTimingAdjustRequested()
 
 	// 曲選択は隠しておく（下のボタンを押せないようにする）
 	SongSelectWidget->SetVisibility(ESlateVisibility::Collapsed);
+
+
+	// 判定調整の間は、背景動画を止めておく
+	if (BackVideo) { BackVideo->PauseVideos(); }
+
+	// 曲選択が閉じていても時間が動かないよう、判定調整の間も時間を止めておく
+	// (すでに止まっているときは、何も変わらない)
+	SetPause(true);
+
 	TimingAdjustWidget->AddToViewport(200);
 
 	FInputModeUIOnly Mode;

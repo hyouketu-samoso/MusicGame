@@ -86,6 +86,10 @@ private:
 	// リトライで開き直したレベルか
 	bool IsRetryStart() const;
 
+	// タイトルで待機中(止めて開始位置に置いてある)か。
+	// ポーズの再開(ResumeVideos)で動かさないために使う。ReleaseFromTitle で下りる
+	bool bParkedAtTitle = false;
+
 	// タイトルで 0 秒へ移動している最中か(Slot1 / Slot2)
 	bool bTitleSeekPending[2] = { false, false };
 
