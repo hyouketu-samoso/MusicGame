@@ -160,6 +160,14 @@ void ABackVideoActor::PauseVideos()
 
 void ABackVideoActor::ResumeVideos()
 {
+	// タイトルで待機中の動画は、ポーズの再開では動かさない
+	// (曲を始めるときの ReleaseFromTitle だけが再生する)
+	if (bParkedAtTitle)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BackVideo: ResumeVideos ignored (parked at title)"));
+		return;
+	}
+
 	if (Slot1.Player && Slot1.Player->IsPaused()) { Slot1.Player->Play(); }
 	if (Slot2.Player && Slot2.Player->IsPaused()) { Slot2.Player->Play(); }
 }
@@ -185,6 +193,9 @@ void ABackVideoActor::ParkAtTitle(const FBackVideoSlot& InSlot)
 {
 	UMediaPlayer* P = InSlot.Player;
 	if (!P) { return; }
+
+	// タイトルで待機中(ポーズの再開で動かさない)
+	bParkedAtTitle = true;
 
 	const int32 Idx = (&InSlot == &Slot2) ? 1 : 0;
 
@@ -214,6 +225,9 @@ void ABackVideoActor::ParkAtTitle(const FBackVideoSlot& InSlot)
 // タイトルからスタート: 止めておいた動画を再生する(開始位置への移動はタイトルで済んでいる)
 void ABackVideoActor::ReleaseFromTitle()
 {
+	// タイトルの待機は終わり。ここからは、ポーズの再開で動かしてよい
+	bParkedAtTitle = false;
+
 	const FBackVideoSlot* Slots[2] = { &Slot1, &Slot2 };
 	bool bNeedFallback = false;
 
