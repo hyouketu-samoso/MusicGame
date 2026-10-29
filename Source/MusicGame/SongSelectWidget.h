@@ -17,6 +17,7 @@
 //#include "Blurprint/UserWidgeet.h
 class UButton;
 class UTextBlock;
+class USoundBase;   // ← 追加(スタートSE用)
 
 UENUM(BlueprintType)
 enum class ESongDifficulty : uint8
@@ -99,6 +100,14 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Fade")
 	float ScaleUpAmount = 0.06f;        // 消えるときに、どれだけ拡大するか(0.06 = 6%)
+
+	// ---- 効果音 ----
+	// ゲームスタートが押されたときに鳴らす SE(WBP の「クラスのデフォルト」で設定する)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Sound")
+	TObjectPtr<USoundBase> StartSE;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Sound")
+	float StartSEVolume = 1.0f;
 
 	//// ---- 選択中の色 ----
 	//UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SongSelect|Color")

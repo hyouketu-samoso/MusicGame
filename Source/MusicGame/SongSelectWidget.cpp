@@ -5,6 +5,7 @@
 #include "Components/TextBlock.h"
 #include "Engine/GameInstance.h"
 #include "Engine/UserInterfaceSettings.h"   // 青い枠線(フォーカスの枠)の設定
+#include "Kismet/GameplayStatics.h"         // スタートSEの再生(PlaySound2D)
 #include "Rhythm/RhythmSettingsSubsystem.h"
 
 namespace
@@ -293,6 +294,12 @@ void USongSelectWidget::HandleStart()
 	if (bClosing)
 	{
 		return;
+	}
+
+	// ゲームスタートのSE(フェード中の連打で二重に鳴らないよう、bClosing の確認より後に置く)
+	if (StartSE)
+	{
+		UGameplayStatics::PlaySound2D(this, StartSE, StartSEVolume);
 	}
 
 	OnStartRequested.Broadcast();
