@@ -16,6 +16,7 @@
 #include "Components/AudioComponent.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
+#include "ResultNiagaraWidgetBase.h"
 
 URhythmGameFlowComponent::URhythmGameFlowComponent()
 {
@@ -272,13 +273,14 @@ void URhythmGameFlowComponent::HandleSongFinished(bool bCleared, double FinalSco
 	// クリア表示を開始する（ResultDelay はクリア後の待機時間として維持）
 	if (UWorld* World = GetWorld())
 	{
-		World->GetTimerManager().SetTimer(
+	/*	World->GetTimerManager().SetTimer(
 			ScreenTimer,
 			this,
 			&URhythmGameFlowComponent::ShowGameClearThenAchievement,
 			FMath::Max(ResultDelay, 0.01f),
 			false
-		);
+		);*/
+		ShowGameClearThenAchievement();
 	}
 }
 
@@ -301,27 +303,124 @@ void URhythmGameFlowComponent::HandleGameOver()
 	GetWorld()->GetTimerManager().SetTimer(ScreenTimer, this, &URhythmGameFlowComponent::ShowRetryScreen, FMath::Max(RetryDelay, 0.01f), false);
 }
 
+void URhythmGameFlowComponent::HandleGameClearNiagaraFinished()
+{
+	// Niagaraが終了したことを記録する
+	bGameClearEffectFinished = true;
+
+	// 最低表示時間も経過していれば、次へ進む
+	TryAdvanceAfterGameClear();
+}
+
 void URhythmGameFlowComponent::ShowGameClearThenAchievement()
 {
-	if (GameClearWidgetClass)
+	// ゲームクリア演出の状態を初期化
+	bGameClearEffectFinished = false;
+	bGameClearMinimumDisplayTimeElapsed = false;
+	bGameClearTransitionStarted = false;
+
+	// 古いタイマーによる意図しない画面遷移を防ぐ
+	if (UWorld* World = GetWorld())
 	{
-		ShowAchievementWidget(GameClearWidgetClass);
+		World->GetTimerManager().ClearTimer(ScreenTimer);
+	}
+
+	if (!GameClearWidgetClass)
+	{
+		ShowPendingAchievement();
+		return;
+	}
+
+	APlayerController* PC =
+		UGameplayStatics::GetPlayerController(this, 0);
+
+	if (!PC)
+	{
+		ShowPendingAchievement();
+		return;
+	}
+
+	UUserWidget* Widget =
+		CreateWidget<UUserWidget>(PC, GameClearWidgetClass);
+
+	if (!Widget)
+	{
+		ShowPendingAchievement();
+		return;
+	}
+
+	UResultNiagaraWidgetBase* NiagaraWidget =
+		Cast<UResultNiagaraWidgetBase>(Widget);
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[GameClear] Widget=%s, NiagaraBase=%s"),
+		*Widget->GetClass()->GetName(),
+		NiagaraWidget ? TEXT("YES") : TEXT("NO")
+	);
+
+	// 親クラスが異なる場合のフォールバック
+	if (!NiagaraWidget)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("RhythmGameFlow: WBP_GameClear の親クラスを UResultNiagaraWidgetBase に変更してください")
+		);
+
+		// Niagaraの終了イベントを受け取れないため、
+		// 最低表示時間を待つ方式にする
+		bGameClearEffectFinished = true;
+
+		ShownWidget = Widget;
+		Widget->SetVisibility(ESlateVisibility::Visible);
+		Widget->SetRenderOpacity(1.0f);
+		Widget->AddToViewport(10000);
 
 		if (UWorld* World = GetWorld())
 		{
 			World->GetTimerManager().SetTimer(
 				ScreenTimer,
 				this,
-				&URhythmGameFlowComponent::ShowPendingAchievement,
-				FMath::Max(AchievementDuration, 0.1f),
+				&URhythmGameFlowComponent::HandleGameClearMinimumDisplayTimeElapsed,
+				FMath::Max(GameClearMinimumDisplayDuration, 0.1f),
 				false
 			);
 		}
+		else
+		{
+			HandleGameClearMinimumDisplayTimeElapsed();
+		}
+
+		return;
+	}
+
+	// ウィジェットを表示する前に終了イベントを登録する
+	NiagaraWidget->OnNiagaraFinished.AddUniqueDynamic(
+		this,
+		&URhythmGameFlowComponent::HandleGameClearNiagaraFinished
+	);
+
+	ShownWidget = Widget;
+	Widget->SetVisibility(ESlateVisibility::Visible);
+	Widget->SetRenderOpacity(1.0f);
+	Widget->AddToViewport(10000);
+
+	// Niagaraの終了とは別に、最低表示時間を計測する
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			ScreenTimer,
+			this,
+			&URhythmGameFlowComponent::HandleGameClearMinimumDisplayTimeElapsed,
+			FMath::Max(GameClearMinimumDisplayDuration, 0.1f),
+			false
+		);
 	}
 	else
 	{
-		// GAME CLEAR のウィジェットが未設定なら、実績表示へ進む
-		ShowPendingAchievement();
+		HandleGameClearMinimumDisplayTimeElapsed();
 	}
 }
 
@@ -378,6 +477,41 @@ void URhythmGameFlowComponent::ShowAchievementWidget(
 
 	Widget->AddToViewport(1000);
 	ShownWidget = Widget;
+}
+
+void URhythmGameFlowComponent::HandleGameClearMinimumDisplayTimeElapsed()
+{
+	// 最低表示時間が経過したことを記録する
+	bGameClearMinimumDisplayTimeElapsed = true;
+
+	// Niagaraも終了している場合だけ次へ進む
+	TryAdvanceAfterGameClear();
+}
+
+void URhythmGameFlowComponent::TryAdvanceAfterGameClear()
+{
+	// すでに移行している場合は二重実行しない
+	if (bGameClearTransitionStarted)
+	{
+		return;
+	}
+
+	// Niagara終了と最低表示時間の両方が必要
+	if (!bGameClearEffectFinished ||
+		!bGameClearMinimumDisplayTimeElapsed)
+	{
+		return;
+	}
+
+	bGameClearTransitionStarted = true;
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(ScreenTimer);
+	}
+
+	// ゲームクリア画面を閉じ、実績またはリザルトへ進む
+	ShowPendingAchievement();
 }
 
 void URhythmGameFlowComponent::ShowResultScreen()
@@ -539,11 +673,6 @@ FRhythmResultData URhythmGameFlowComponent::BuildResultData() const
 			}
 		}
 	}
-
-
-	// ランクはリザルト画面がスコアから決める（bAutoRankFromScore）。
-	// FULL COMBO / ALL PERFECT・NEW RECORD は決め方が未定のため false のまま
-
 	return Data;
 }
 
