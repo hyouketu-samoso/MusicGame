@@ -21,8 +21,8 @@ URhythmScoreComponent::URhythmScoreComponent()
 	};
 
 	// 体力変化（回復なし）。仕様書は Bad −8 / Miss −15 だったが、調整で Bad −5 / Miss −10 に変更
-	HealthChanges.Bad  = 0.0f;
-	HealthChanges.Miss = 0.0f;
+	HealthChanges.Bad  = -5.0f;
+	HealthChanges.Miss = -10.0f;
 
 	JudgementCounts.Init(0, StaticEnum<ERhythmJudgement>()->NumEnums() - 1);
 }
