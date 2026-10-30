@@ -81,10 +81,6 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Achievement")
 	TSubclassOf<UUserWidget> NewRecordWidgetClass;
 
-	// GAME CLEAR・実績を表示する時間
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Achievement", meta = (ClampMin = "0.1"))
-	float AchievementDuration = 1.5f;
-
 	// 表示する実績（優先順位により1つだけ選択）
 	UPROPERTY()
 	TSubclassOf<UUserWidget> PendingAchievementClass;
@@ -104,9 +100,20 @@ protected:
 
 	// ---------- タイミング ----------
 
-	// 曲が終わってからリザルト画面を出すまで（秒）
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Timing", meta = (ClampMin = 0.0, Units = "s"))
-	float ResultDelay = 2.0f;
+	// 曲が終わってからクリア表示を開始するまで（秒）
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Timing",
+		meta = (ClampMin = 0.0, Units = "s"))
+	float ResultDelay = 0.0f;
+
+	// ゲームクリア画面を最低限表示する時間（秒）
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Achievement",
+		meta = (ClampMin = "0.1", Units = "s"))
+	float GameClearMinimumDisplayDuration = 4.0f;
+
+	// 実績表示時間（秒）
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Achievement",
+		meta = (ClampMin = "0.1"))
+	float AchievementDuration = 4.0f;
 
 	// ゲームオーバーからリトライ画面を出すまで（秒）
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rhythm Flow|Timing", meta = (ClampMin = 0.0, Units = "s"))
@@ -153,6 +160,9 @@ private:
 	UFUNCTION()
 	void HandleGameOver();
 
+	UFUNCTION()
+	void HandleGameClearNiagaraFinished();
+
 	void ShowResultScreen();
 	void ShowRetryScreen();
 
@@ -163,6 +173,21 @@ private:
 	void ShowGameClearThenAchievement();
 	void ShowPendingAchievement();
 	void ShowAchievementWidget(TSubclassOf<UUserWidget> WidgetClass);
+
+	// ゲームクリア画面の最低表示時間が経過したとき
+	void HandleGameClearMinimumDisplayTimeElapsed();
+
+	// Niagara終了と最低表示時間の両方を満たしたか確認する
+	void TryAdvanceAfterGameClear();
+
+	// ゲームクリア演出の終了を確認したか
+	bool bGameClearEffectFinished = false;
+
+	// ゲームクリア画面の最低表示時間が経過したか
+	bool bGameClearMinimumDisplayTimeElapsed = false;
+
+	// 次の画面への移行をすでに開始したか
+	bool bGameClearTransitionStarted = false;
 
 	// 曲の終わりの条件（譜面の時間が曲の長さを過ぎた、かつ判定がすべて終わった）を満たしたか
 	bool IsSongEnded() const;
